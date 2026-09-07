@@ -50,3 +50,28 @@ Design and implement configuration-version lineage without disrupting the frozen
 ### Next controlled change
 
 Design and implement the smallest version-lineage schema that can capture an immutable configuration snapshot without disrupting the existing strategy and backtest framework.
+
+## 2026-09-07 — Strategy-Level Configuration Version Snapshot
+
+### Added
+
+- Live table `analytics.strategy_config_version` with immutable `configuration_id`.
+- Strategy-level snapshot columns aligned to current `strategy_config` attributes.
+- Repository create DDL in `sql/09_create_strategy_configuration.sql`.
+- Two snapshot rows: frozen legacy version 1 and draft V2 version 2.
+
+### Preserved
+
+- V2 top-level weight columns remain 1.0000 / 0 / 0 / 0.
+- Actual V2 factor-group mix remains only in `strategy_factor_groups`.
+- Existing backtest run 1 is unchanged and still references `strategy_id` only.
+
+### Not yet implemented
+
+- Versioned factor-group snapshot
+- Versioned factor snapshot
+- `backtest_runs.configuration_id`
+
+### Next controlled change
+
+Inspect `strategy_factor_groups` and add the smallest versioned factor-group snapshot under `strategy_config_version`. Do not recreate `strategy_config_version`.

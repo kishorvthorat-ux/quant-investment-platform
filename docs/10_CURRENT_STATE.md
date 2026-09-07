@@ -11,7 +11,7 @@
 ## Git Baseline
 
 **Branch:** checkpoint/pre-reconciliation-2026-09-07
-**HEAD:** 8e214ae checkpoint: pre-reconciliation state 2026-09-07
+**HEAD:** d8e1719 docs: define immutable configuration version lineage
 
 ## Strategy State
 
@@ -43,7 +43,7 @@
 
 ## Known Architecture Gaps
 
-1. Configuration version is stored on strategy_config but is not propagated through factor configuration.
+1. Factor-group and factor rows remain keyed by strategy, not configuration version.
 2. backtest_runs does not record the exact configuration version used by a run.
 3. Several V2 downstream models still assume fixed factor names.
 4. Portfolio transaction cost configuration is not fully propagated.
@@ -51,27 +51,36 @@
 
 ## Next Phase
 
-Establish immutable configuration-version lineage while preserving the frozen legacy strategy and existing backtest results. Then reconcile the downstream V2 pipeline so that ranking, portfolio construction, transaction costs, and backtesting consume the exact selected configuration.
+Add an immutable factor-group snapshot under `strategy_config_version`, then versioned factors, then attach `configuration_id` to `backtest_runs`. Do not change live V2 weights or legacy results.
 
-## Configuration Version Lineage — Design Status
+## Configuration Version Lineage — Implementation Status
 
-As of 2026-09-07, the platform has an explicit documented design for configuration-version lineage.
+### Implemented
 
-### Current state
+`analytics.strategy_config_version` is live. It is the immutable strategy-level snapshot identity.
 
-- `strategy_config` contains `configuration_version`, but it is not an immutable identity.
-- `strategy_factor_groups` is keyed by `(strategy_id, factor_group_id)`.
-- `strategy_factors` is keyed by `(strategy_id, feature_id)`.
-- `strategy_feature_configuration` is a derived table.
-- `backtest_runs` is identified by `run_id` and currently references only `strategy_id`.
-- No existing configuration-version or experiment tables were found in the repository/database inspection.
+- Primary key: `configuration_id`
+- Unique: `(strategy_id, configuration_version)`
+- FK: `strategy_id` → `analytics.strategy_config`
+- Status: `DRAFT | VALIDATED | FROZEN | RETIRED`
+- Snapshot columns copy the current `strategy_config` attributes, including the existing four top-level weight columns. Those columns are preserved as stored, not rewritten to match factor-group allocations.
 
-### Target state
+Current rows:
 
-Future backtests must be traceable to an immutable configuration version containing the exact factor-group and feature configuration used for the run.
+- `configuration_id = 1` / `M_RD_504010` / version 1 / `FROZEN` / `LEGACY`
+- `configuration_id = 2` / `M_RD_504010_V2` / version 2 / `DRAFT` / `FACTOR_CONFIG`
 
-### Implementation status
+Repository DDL: `sql/09_create_strategy_configuration.sql` (create-if-not-exists only; do not rerun as a migration).
 
-**Design documented; database implementation not yet started.**
+### Not yet implemented
+
+- Versioned factor-group snapshot
+- Versioned factor snapshot
+- `backtest_runs.configuration_id`
+
+Mutable sources remain:
+
+- `strategy_factor_groups` keyed by `(strategy_id, factor_group_id)`
+- `strategy_factors` keyed by `(strategy_id, feature_id)`
 
 Existing legacy and V2 configurations remain unchanged.

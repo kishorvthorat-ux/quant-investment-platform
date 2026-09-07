@@ -269,3 +269,11 @@ The existing `strategy_factor_groups`, `strategy_factors`, V2 scoring path, froz
 Version lineage will therefore be introduced incrementally. Existing configurations will be preserved, and an immutable configuration snapshot will become the basis for future validation and backtesting.
 
 `strategy_feature_configuration` remains a derived projection and must not become the configuration source of truth.
+
+### Implemented
+
+`analytics.strategy_config_version` now stores immutable `configuration_id` plus a strategy-level snapshot of current `strategy_config` attributes (including the four top-level weight columns as stored).
+
+### Remaining gap
+
+Factor groups, factors, and `backtest_runs` are not yet attached to `configuration_id`.

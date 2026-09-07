@@ -73,3 +73,7 @@ Do not disrupt:
 - existing working scoring and portfolio pipelines
 
 The implementation will proceed incrementally after the target schema is reviewed.
+
+### Implementation progress
+
+Strategy-level snapshot table `analytics.strategy_config_version` is in place. Factor-group and factor snapshots are not yet versioned. `backtest_runs` still references `strategy_id` only.
