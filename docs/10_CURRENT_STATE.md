@@ -43,15 +43,14 @@
 
 ## Known Architecture Gaps
 
-1. Factor-group and factor rows remain keyed by strategy, not configuration version.
-2. backtest_runs does not record the exact configuration version used by a run.
-3. Several V2 downstream models still assume fixed factor names.
-4. Portfolio transaction cost configuration is not fully propagated.
-5. Production orchestration and deployment are not yet finalized.
+1. Several V2 downstream models still assume fixed factor names.
+2. Portfolio transaction cost configuration is not fully propagated.
+3. Backtest result and metric lineage still needs to be reviewed end-to-end beyond `backtest_runs`.
+4. Production orchestration and deployment are not yet finalized.
 
 ## Next Phase
 
-Add an immutable factor-group snapshot under `strategy_config_version`, then versioned factors, then attach `configuration_id` to `backtest_runs`. Do not change live V2 weights or legacy results.
+Propagate configuration-version lineage through the existing backtest and analytics models, while preserving legacy results and keeping production execution dependent only on validated/frozen configuration snapshots. Do not change live V2 weights or legacy results.
 
 ## Configuration Version Lineage — Implementation Status
 
@@ -72,11 +71,32 @@ Current rows:
 
 Repository DDL: `sql/09_create_strategy_configuration.sql` (create-if-not-exists only; do not rerun as a migration).
 
-### Not yet implemented
+### Implemented
 
-- Versioned factor-group snapshot
-- Versioned factor snapshot
-- `backtest_runs.configuration_id`
+`analytics.strategy_config_version_factor_group` provides the immutable factor-group snapshot for each configuration.
+
+- Primary key: `(configuration_id, factor_group_id)`
+- FK: `configuration_id` → `analytics.strategy_config_version`
+- Group weights and enabled status are snapshotted from the source configuration.
+
+`analytics.strategy_config_version_factor` provides the immutable factor-level snapshot for each configuration.
+
+- Primary key: `(configuration_id, factor_group_id, feature_id)`
+- FK: `(configuration_id, factor_group_id)` → `analytics.strategy_config_version_factor_group`
+- FK: `feature_id` → `metadata.feature_catalog`
+- Feature weights, direction, and enabled status are snapshotted from the source configuration.
+
+Configuration `2` (`M_RD_504010_V2`) contains 4 factor groups and 10 factors. Group weights sum to `1.000000`, factor weights sum to `1.000000`, and all group/factor weights reconcile exactly.
+
+`analytics.backtest_runs.configuration_id` is live and `NOT NULL`.
+
+- FK: `configuration_id` → `analytics.strategy_config_version`
+- Existing `run_id = 1` is linked to `configuration_id = 1` (`M_RD_504010`, version 1, `FROZEN`, `LEGACY`).
+- Historical backtest results and metrics were not changed.
+
+Repository DDL:
+- `sql/09_create_strategy_configuration.sql` — strategy, factor-group, and factor version snapshots.
+- `sql/10_add_backtest_configuration_lineage.sql` — backtest configuration lineage migration.
 
 Mutable sources remain:
 
