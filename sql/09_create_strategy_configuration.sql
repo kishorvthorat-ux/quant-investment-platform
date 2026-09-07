@@ -36,3 +36,60 @@ CREATE TABLE IF NOT EXISTS analytics.strategy_config_version (
         FOREIGN KEY (strategy_id)
         REFERENCES analytics.strategy_config(strategy_id)
 );
+
+
+CREATE TABLE IF NOT EXISTS analytics.strategy_config_version_factor_group (
+
+    configuration_id BIGINT NOT NULL,
+
+    factor_group_id VARCHAR(50) NOT NULL,
+    factor_group_name VARCHAR(100) NOT NULL,
+    group_weight NUMERIC(18,6) NOT NULL,
+    enabled BOOLEAN NOT NULL DEFAULT TRUE,
+
+    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+    CONSTRAINT pk_strategy_config_version_factor_group
+        PRIMARY KEY (configuration_id, factor_group_id),
+
+    CONSTRAINT chk_strategy_config_version_factor_group_weight
+        CHECK (group_weight >= 0),
+
+    CONSTRAINT fk_strategy_config_version_factor_group_configuration
+        FOREIGN KEY (configuration_id)
+        REFERENCES analytics.strategy_config_version(configuration_id)
+);
+
+
+CREATE TABLE IF NOT EXISTS analytics.strategy_config_version_factor (
+
+    configuration_id BIGINT NOT NULL,
+
+    factor_group_id VARCHAR(50) NOT NULL,
+    feature_id VARCHAR(50) NOT NULL,
+    feature_weight NUMERIC(18,6) NOT NULL DEFAULT 0,
+    direction VARCHAR(10) NOT NULL DEFAULT 'POSITIVE',
+    enabled BOOLEAN NOT NULL DEFAULT TRUE,
+
+    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+    CONSTRAINT pk_strategy_config_version_factor
+        PRIMARY KEY (configuration_id, factor_group_id, feature_id),
+
+    CONSTRAINT chk_strategy_config_version_factor_weight
+        CHECK (feature_weight >= 0),
+
+    CONSTRAINT chk_strategy_config_version_factor_direction
+        CHECK (direction IN ('POSITIVE', 'NEGATIVE')),
+
+    CONSTRAINT fk_strategy_config_version_factor_group
+        FOREIGN KEY (configuration_id, factor_group_id)
+        REFERENCES analytics.strategy_config_version_factor_group(
+            configuration_id,
+            factor_group_id
+        ),
+
+    CONSTRAINT fk_strategy_config_version_factor_feature
+        FOREIGN KEY (feature_id)
+        REFERENCES metadata.feature_catalog(feature_id)
+);
