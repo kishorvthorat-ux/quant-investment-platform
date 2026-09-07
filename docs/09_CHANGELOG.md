@@ -24,14 +24,15 @@
 
 ### Current Gap
 
-- configuration_version exists on strategy_config but is not yet propagated to factor configuration rows.
-- backtest_runs does not yet record the configuration version used by a run.
+- Configuration-version lineage is implemented through immutable strategy, factor-group, and factor snapshots.
+- `backtest_runs.configuration_id` records the exact configuration snapshot used by each run.
 - Some downstream V2 models still contain hard-coded factor assumptions.
 - Portfolio transaction cost configuration is not yet fully propagated through the V2 pipeline.
+- Downstream backtest result and performance-metric lineage still needs to be reviewed end-to-end.
 
 ### Next Controlled Change
 
-Design and implement configuration-version lineage without disrupting the frozen legacy strategy or existing backtest results.
+Propagate and validate configuration-version lineage through the existing downstream backtest and analytics models without disrupting the frozen legacy strategy or existing backtest results.
 
 ## 2026-09-07 — Configuration Version Lineage Design
 
