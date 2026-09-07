@@ -1,0 +1,61 @@
+with prices as (
+
+    select
+        trade_date,
+        security_id,
+        symbol,
+        exchange,
+        open,
+        high,
+        low,
+        close,
+        adjusted_close,
+        volume
+    from {{ ref('fact_daily_prices') }}
+
+),
+
+returns as (
+
+    select
+        trade_date,
+        security_id,
+        symbol,
+        exchange,
+        open,
+        high,
+        low,
+        close,
+        adjusted_close,
+        volume,
+
+        lag(adjusted_close) over (
+            partition by security_id
+            order by trade_date
+        ) as previous_adjusted_close
+
+    from prices
+
+)
+
+select
+    trade_date,
+    security_id,
+    symbol,
+    exchange,
+    open,
+    high,
+    low,
+    close,
+    adjusted_close,
+    volume,
+    previous_adjusted_close,
+
+    case
+        when previous_adjusted_close is null then null
+        when previous_adjusted_close = 0 then null
+        else
+            (adjusted_close / previous_adjusted_close) - 1
+    end as daily_return
+
+from returns

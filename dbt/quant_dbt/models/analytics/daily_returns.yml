@@ -1,0 +1,33 @@
+version: 2
+
+models:
+  - name: daily_returns
+    description: >
+      Daily adjusted-close returns for each security.
+      Grain is one security per trading date.
+
+    tests:
+      - unique:
+          column_name: "concat(cast(security_id as varchar), '-', cast(trade_date as varchar))"
+
+    columns:
+
+      - name: trade_date
+        description: "Trading date."
+        tests:
+          - not_null
+
+      - name: security_id
+        description: "Security identifier."
+        tests:
+          - not_null
+
+      - name: symbol
+        description: "Security ticker."
+        tests:
+          - not_null
+
+      - name: adjusted_close
+        description: "Adjusted closing price."
+        tests:
+          - not_null

@@ -1,0 +1,34 @@
+version: 2
+
+models:
+  - name: portfolio_weights
+    description: >
+      Target portfolio weights generated from the quantitative stock ranking.
+      The strategy holds the top two securities with equal 50% weights.
+
+    columns:
+
+      - name: trade_date
+        description: Signal generation date.
+        tests:
+          - not_null
+
+      - name: security_id
+        description: Security identifier.
+        tests:
+          - not_null
+
+      - name: symbol
+        description: Security ticker.
+        tests:
+          - not_null
+
+      - name: rank
+        description: Cross-sectional ranking for the trading date.
+        tests:
+          - not_null
+
+      - name: target_weight
+        description: Target portfolio allocation for the security.
+        tests:
+          - not_null

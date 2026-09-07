@@ -1,0 +1,27 @@
+version: 2
+
+models:
+
+  - name: strategy_config_validation
+    description: "Validation exceptions for config-driven strategy configuration."
+
+    columns:
+      - name: strategy_id
+        description: "Strategy identifier"
+        tests:
+          - not_null
+
+      - name: validation_type
+        description: "Type of configuration validation failure"
+        tests:
+          - not_null
+
+      - name: expected_weight
+        description: "Expected configured weight"
+        tests:
+          - not_null
+
+      - name: actual_weight
+        description: "Actual configured weight"
+        tests:
+          - not_null

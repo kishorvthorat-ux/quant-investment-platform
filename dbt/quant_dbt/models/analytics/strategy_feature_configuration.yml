@@ -1,0 +1,36 @@
+version: 2
+
+models:
+  - name: strategy_feature_configuration
+    description: "Resolved configuration of enabled strategy features, factor groups, and feature metadata."
+
+    columns:
+      - name: strategy_id
+        description: "Strategy identifier"
+        tests:
+          - not_null
+
+      - name: factor_group_id
+        description: "Factor group identifier"
+        tests:
+          - not_null
+
+      - name: feature_id
+        description: "Feature identifier"
+        tests:
+          - not_null
+
+      - name: feature_weight
+        description: "Weight assigned to the feature"
+        tests:
+          - not_null
+
+      - name: direction
+        description: "Scoring direction for the feature"
+        tests:
+          - not_null
+
+      - name: feature_type
+        description: "Feature calculation type"
+        tests:
+          - not_null

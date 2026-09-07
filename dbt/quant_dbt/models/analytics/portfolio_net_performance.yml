@@ -1,0 +1,28 @@
+version: 2
+
+models:
+  - name: portfolio_net_performance
+    description: >
+      Cumulative portfolio performance after transaction costs.
+
+    columns:
+      - name: trade_date
+        description: Portfolio trading date.
+        tests:
+          - not_null
+          - unique
+
+      - name: portfolio_net_return
+        description: Daily portfolio return after transaction costs.
+        tests:
+          - not_null
+
+      - name: cumulative_growth
+        description: Growth of one unit of initial capital.
+        tests:
+          - not_null
+
+      - name: cumulative_return
+        description: Cumulative net portfolio return.
+        tests:
+          - not_null

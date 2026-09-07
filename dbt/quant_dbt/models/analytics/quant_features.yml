@@ -1,0 +1,33 @@
+version: 2
+
+models:
+  - name: quant_features
+    description: >
+      Quantitative features calculated from daily security returns.
+      Grain is one security per trading date.
+
+    tests:
+      - unique:
+          column_name: "concat(cast(security_id as varchar), '-', cast(trade_date as varchar))"
+
+    columns:
+
+      - name: trade_date
+        tests:
+          - not_null
+
+      - name: security_id
+        tests:
+          - not_null
+
+      - name: symbol
+        tests:
+          - not_null
+
+      - name: adjusted_close
+        tests:
+          - not_null
+
+      - name: running_max_price
+        tests:
+          - not_null

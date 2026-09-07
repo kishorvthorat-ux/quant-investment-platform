@@ -1,0 +1,20 @@
+version: 2
+
+models:
+  - name: portfolio_turnover
+    description: >
+      Daily portfolio turnover calculated from absolute changes
+      in security target weights.
+
+    columns:
+      - name: trade_date
+        description: Portfolio trading date.
+        tests:
+          - not_null
+          - unique
+
+      - name: portfolio_turnover
+        description: >
+          Fraction of portfolio traded on the rebalance date.
+        tests:
+          - not_null

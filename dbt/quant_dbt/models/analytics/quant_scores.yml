@@ -1,0 +1,30 @@
+version: 2
+
+models:
+  - name: quant_scores
+    description: >
+      Cross-sectional quantitative stock scores combining momentum,
+      trend, volatility and drawdown factors.
+
+    columns:
+
+      - name: trade_date
+        description: Trading date.
+        tests:
+          - not_null
+
+      - name: security_id
+        description: Security identifier.
+        tests:
+          - not_null
+
+      - name: symbol
+        description: Security ticker.
+        tests:
+          - not_null
+
+      - name: composite_score
+        description: >
+          Weighted composite quantitative score ranging from 0 to 1.
+        tests:
+          - not_null

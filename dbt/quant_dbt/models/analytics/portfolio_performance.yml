@@ -1,0 +1,25 @@
+version: 2
+
+models:
+  - name: portfolio_performance
+    description: >
+      Cumulative gross performance of the quantitative portfolio
+      based on daily strategy returns.
+
+    columns:
+      - name: trade_date
+        tests:
+          - not_null
+          - unique
+
+      - name: portfolio_daily_return
+        tests:
+          - not_null
+
+      - name: cumulative_growth
+        tests:
+          - not_null
+
+      - name: cumulative_return
+        tests:
+          - not_null

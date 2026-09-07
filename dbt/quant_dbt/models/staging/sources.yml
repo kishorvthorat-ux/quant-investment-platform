@@ -1,0 +1,170 @@
+version: 2
+
+sources:
+  - name: raw
+    schema: raw
+    description: "Raw data ingested into PostgreSQL"
+    tables:
+      - name: market_prices
+        description: "Daily market prices for tracked securities"
+        columns:
+          - name: trade_date
+            description: "Trading date"
+            tests:
+              - not_null
+          - name: symbol
+            description: "Security ticker symbol"
+            tests:
+              - not_null
+          - name: exchange
+            description: "Exchange where the security trades"
+            tests:
+              - not_null
+          - name: close
+            description: "Unadjusted closing price"
+            tests:
+              - not_null
+          - name: adjusted_close
+            description: "Adjusted closing price"
+            tests:
+              - not_null
+          - name: volume
+            description: "Daily traded volume"
+            tests:
+              - not_null
+
+      - name: security_master
+        description: "Security reference and identity data"
+        columns:
+          - name: security_id
+            description: "Stable internal security identifier"
+            tests:
+              - not_null
+              - unique
+          - name: symbol
+            description: "Security ticker symbol"
+            tests:
+              - not_null
+          - name: exchange
+            description: "Exchange"
+            tests:
+              - not_null
+
+      - name: trading_calendar
+        description: "Provisional trading calendar derived from observed market data."
+        columns:
+          - name: trade_date
+            tests:
+              - not_null
+              - unique
+          - name: exchange
+            tests:
+              - not_null
+          - name: is_trading_day
+            tests:
+              - not_null
+
+  - name: analytics
+    schema: analytics
+    description: "Analytics and strategy control-plane tables"
+
+    tables:
+      - name: strategy_factor_groups
+        description: "Configured factor groups for each strategy"
+        columns:
+          - name: strategy_id
+            description: "Strategy identifier"
+            tests:
+              - not_null
+              - relationships:
+                  arguments:
+                    to: source('analytics', 'strategy_config')
+                    field: strategy_id
+
+          - name: factor_group_id
+            description: "Factor group identifier"
+            tests:
+              - not_null
+
+          - name: factor_group_name
+            description: "Human-readable factor group name"
+            tests:
+              - not_null
+
+          - name: group_weight
+            description: "Weight assigned to the factor group"
+            tests:
+              - not_null
+
+          - name: enabled
+            description: "Whether the factor group is enabled"
+            tests:
+              - not_null
+
+      - name: strategy_factors
+        description: "Configured features, weights, and directions within each factor group"
+        columns:
+          - name: strategy_id
+            description: "Strategy identifier"
+            tests:
+              - not_null
+          - name: feature_id
+            description: "Feature identifier"
+            tests:
+              - not_null
+              - relationships:
+                  arguments:
+                    to: source('metadata', 'feature_catalog')
+                    field: feature_id
+
+          - name: factor_group_id
+            description: "Factor group identifier"
+            tests:
+              - not_null
+
+          - name: feature_weight
+            description: "Weight assigned to the feature"
+            tests:
+              - not_null
+
+          - name: direction
+            description: "Scoring direction for the feature"
+            tests:
+              - not_null
+
+          - name: enabled
+            description: "Whether the strategy factor is enabled"
+            tests:
+              - not_null
+
+      - name: strategy_config
+        description: "Strategy-level configuration and lifecycle metadata"
+        columns:
+          - name: strategy_id
+            description: "Unique strategy identifier"
+            tests:
+              - not_null
+              - unique
+
+  - name: metadata
+    schema: metadata
+    description: "Metadata and control-plane tables used by the quantitative platform"
+
+    tables:
+      - name: feature_catalog
+        description: "Catalog of available quantitative features"
+        columns:
+          - name: feature_id
+            description: "Unique feature identifier"
+            tests:
+              - not_null
+              - unique
+
+      - name: strategy_config
+        description: "Strategy-level configuration and lifecycle metadata"
+        columns:
+          - name: strategy_id
+            description: "Unique strategy identifier"
+            tests:
+              - not_null
+              - unique

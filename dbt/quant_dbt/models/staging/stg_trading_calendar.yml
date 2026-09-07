@@ -1,0 +1,22 @@
+version: 2
+
+models:
+  - name: stg_trading_calendar
+    description: "Staged trading calendar used for quantitative time-series analysis."
+
+    columns:
+      - name: trade_date
+        description: "Trading calendar date."
+        tests:
+          - not_null
+          - unique
+
+      - name: exchange
+        description: "Exchange associated with the calendar."
+        tests:
+          - not_null
+
+      - name: is_trading_day
+        description: "Whether the date is a trading day."
+        tests:
+          - not_null

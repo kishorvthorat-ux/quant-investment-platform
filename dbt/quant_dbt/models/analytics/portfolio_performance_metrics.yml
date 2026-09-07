@@ -1,0 +1,42 @@
+version: 2
+
+models:
+  - name: portfolio_performance_metrics
+    description: "Strategy-level gross, net, risk, turnover and transaction-cost performance metrics."
+
+    columns:
+      - name: start_date
+        tests:
+          - not_null
+
+      - name: end_date
+        tests:
+          - not_null
+
+      - name: trading_days
+        tests:
+          - not_null
+
+      - name: gross_cumulative_return
+        tests:
+          - not_null
+
+      - name: net_cumulative_return
+        tests:
+          - not_null
+
+      - name: gross_cagr
+        tests:
+          - not_null
+
+      - name: net_cagr
+        tests:
+          - not_null
+
+      - name: gross_sharpe
+        tests:
+          - not_null
+
+      - name: net_sharpe
+        tests:
+          - not_null

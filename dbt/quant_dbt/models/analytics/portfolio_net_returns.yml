@@ -1,0 +1,29 @@
+version: 2
+
+models:
+  - name: portfolio_net_returns
+    description: >
+      Daily portfolio returns after applying transaction costs
+      based on portfolio turnover.
+
+    columns:
+      - name: trade_date
+        tests:
+          - not_null
+          - unique
+
+      - name: portfolio_daily_return
+        tests:
+          - not_null
+
+      - name: portfolio_turnover
+        tests:
+          - not_null
+
+      - name: transaction_cost
+        tests:
+          - not_null
+
+      - name: portfolio_net_return
+        tests:
+          - not_null

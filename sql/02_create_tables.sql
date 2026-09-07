@@ -84,3 +84,20 @@ CREATE TABLE metadata.ingestion_log (
 
     error_message TEXT
 );
+CREATE TABLE IF NOT EXISTS raw.security_master (
+    security_id BIGSERIAL PRIMARY KEY,
+    symbol VARCHAR(30) NOT NULL,
+    company_name VARCHAR(200),
+    isin VARCHAR(20),
+    exchange VARCHAR(20) NOT NULL,
+    sector VARCHAR(100),
+    industry VARCHAR(150),
+    listing_date DATE,
+    delisting_date DATE,
+    active_flag BOOLEAN DEFAULT TRUE,
+    source VARCHAR(100),
+    ingestion_timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+
+    CONSTRAINT uq_security_symbol_exchange
+        UNIQUE (symbol, exchange)
+);

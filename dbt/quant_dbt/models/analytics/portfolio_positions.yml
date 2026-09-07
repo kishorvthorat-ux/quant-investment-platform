@@ -1,0 +1,34 @@
+version: 2
+
+models:
+  - name: portfolio_positions
+    description: >
+      Maps end-of-day portfolio signals to the next available trading
+      session to prevent look-ahead bias in backtesting.
+
+    columns:
+
+      - name: signal_date
+        description: Date on which the portfolio signal was generated.
+        tests:
+          - not_null
+
+      - name: position_date
+        description: Next trading date on which the target position is applied.
+        tests:
+          - not_null
+
+      - name: security_id
+        description: Security identifier.
+        tests:
+          - not_null
+
+      - name: symbol
+        description: Security ticker.
+        tests:
+          - not_null
+
+      - name: target_weight
+        description: Target portfolio weight applied on the position date.
+        tests:
+          - not_null
