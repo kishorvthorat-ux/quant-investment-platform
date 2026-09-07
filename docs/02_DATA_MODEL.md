@@ -195,17 +195,20 @@ backtest_runs provides run-level identity:
 
 Daily and period results reference run_id.
 
-## 10. Configuration Reproducibility Gap
+## 10. Configuration Reproducibility and Lineage
 
-The current schema stores:
+The schema now provides an immutable configuration identity through:
 
-    strategy_config.configuration_version
+    strategy_config_version.configuration_id
 
-but backtest_runs does not currently store the configuration version used by the run.
+The version snapshot preserves the strategy-level configuration attributes required to reproduce the configuration state.
 
-Similarly, factor-group and strategy-feature configuration tables are currently keyed by strategy rather than configuration version.
+Factor groups and strategy features are also snapshotted by configuration version through:
 
-Therefore the current model does not yet provide complete immutable configuration lineage for historical backtests.
+    strategy_config_version_factor_group
+    strategy_config_version_factor
+
+`backtest_runs.configuration_id` now records the exact immutable configuration snapshot used by each backtest run.
 
 Target lineage:
 
@@ -224,7 +227,7 @@ Target lineage:
                         +-- daily results
                         +-- period results
 
-This gap must be resolved before production-grade reproducibility is considered complete.
+The core configuration-to-backtest-run lineage is now implemented. Complete production-grade reproducibility still requires downstream backtest results and performance metrics to be reviewed and, where appropriate, linked through the same run-level lineage.
 
 ## 11. Design Principles
 
@@ -241,17 +244,17 @@ This gap must be resolved before production-grade reproducibility is considered 
 
 ### Decision
 
-Strategy configuration must eventually be reproducible through an immutable configuration-version identity.
+Strategy configuration must be reproducible through an immutable configuration-version identity.
 
 The current configuration hierarchy remains the working control plane:
 
 `strategy_config -> strategy_factor_groups -> strategy_factors -> metadata.feature_catalog`
 
-However, the existing `configuration_version` column on `strategy_config` is currently an attribute rather than an immutable configuration identity because `strategy_config` is keyed only by `strategy_id`, while factor-group and factor rows are mutable.
+The immutable lineage layer snapshots this configuration into `strategy_config_version` and its versioned factor-group and factor tables.
 
 ### Target lineage
 
-The target architecture is:
+The architecture is:
 
 `strategy_config`
 → `strategy_config_version`
@@ -260,7 +263,7 @@ The target architecture is:
 → `backtest_runs`
 → backtest results
 
-A backtest must ultimately identify the exact configuration version that produced it.
+A backtest identifies the exact immutable configuration snapshot that produced it.
 
 ### Migration principle
 
@@ -272,8 +275,16 @@ Version lineage will therefore be introduced incrementally. Existing configurati
 
 ### Implemented
 
-`analytics.strategy_config_version` now stores immutable `configuration_id` plus a strategy-level snapshot of current `strategy_config` attributes (including the four top-level weight columns as stored).
+`analytics.strategy_config_version` stores immutable `configuration_id` plus a strategy-level snapshot of current `strategy_config` attributes (including the four top-level weight columns as stored).
+
+`analytics.strategy_config_version_factor_group` stores immutable factor-group snapshots keyed by `(configuration_id, factor_group_id)`.
+
+`analytics.strategy_config_version_factor` stores immutable factor snapshots keyed by `(configuration_id, factor_group_id, feature_id)`.
+
+`analytics.backtest_runs.configuration_id` records the exact configuration snapshot used by each backtest run.
+
+Existing legacy backtest results were preserved unchanged; the existing historical run is linked to its exact legacy configuration snapshot.
 
 ### Remaining gap
 
-Factor groups, factors, and `backtest_runs` are not yet attached to `configuration_id`.
+Downstream backtest result and performance-metric lineage still needs to be reviewed end-to-end. V2 downstream models also need to consume configuration values rather than retaining hard-coded strategy assumptions where applicable.
