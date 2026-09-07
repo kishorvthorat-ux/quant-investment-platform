@@ -32,7 +32,7 @@ Hard-coded composite scoring formulas for each strategy.
 
 ### Related Reproducibility Gap
 
-strategy_config already contains configuration_version, but factor configuration and backtest_runs do not yet carry configuration-version lineage. This must be addressed before production-grade historical reproducibility is considered complete.
+The core configuration-version lineage is now implemented through immutable configuration snapshots, versioned factor configuration, and `backtest_runs.configuration_id`. Downstream backtest results and performance metrics still require end-to-end lineage review before production-grade historical reproducibility is considered complete.
 
 ## DEC-002 — Immutable Configuration Version Lineage
 
@@ -41,9 +41,9 @@ strategy_config already contains configuration_version, but factor configuration
 
 ### Context
 
-The platform supports configuration-driven strategies, but the current configuration tables are mutable and do not provide an immutable identity for a complete strategy configuration.
+The platform supports configuration-driven strategies, while the working configuration tables remain mutable control-plane tables.
 
-`strategy_config.configuration_version` exists, but `strategy_config` is keyed only by `strategy_id`. Factor groups and factors are also keyed by strategy rather than configuration version. Therefore, the current version number alone does not guarantee historical reproducibility.
+`strategy_config.configuration_version` alone does not provide immutable historical identity because `strategy_config` is keyed by `strategy_id`. An immutable configuration-version layer is therefore required to snapshot the complete configuration used for validation, experimentation, and backtesting.
 
 ### Decision
 
@@ -76,4 +76,12 @@ The implementation will proceed incrementally after the target schema is reviewe
 
 ### Implementation progress
 
-Strategy-level snapshot table `analytics.strategy_config_version` is in place. Factor-group and factor snapshots are not yet versioned. `backtest_runs` still references `strategy_id` only.
+The immutable configuration-version lineage is now implemented.
+
+- `analytics.strategy_config_version` stores the immutable strategy-level configuration snapshot and `configuration_id`.
+- `analytics.strategy_config_version_factor_group` stores immutable factor-group snapshots keyed by `(configuration_id, factor_group_id)`.
+- `analytics.strategy_config_version_factor` stores immutable factor snapshots keyed by `(configuration_id, factor_group_id, feature_id)`.
+- `analytics.backtest_runs.configuration_id` records the exact configuration snapshot used by each backtest run.
+- Existing legacy backtest results were preserved unchanged and linked to their corresponding legacy configuration snapshot.
+
+Remaining work is to review and propagate lineage through downstream backtest results and performance metrics.
