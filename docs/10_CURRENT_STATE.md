@@ -52,3 +52,26 @@
 ## Next Phase
 
 Establish immutable configuration-version lineage while preserving the frozen legacy strategy and existing backtest results. Then reconcile the downstream V2 pipeline so that ranking, portfolio construction, transaction costs, and backtesting consume the exact selected configuration.
+
+## Configuration Version Lineage — Design Status
+
+As of 2026-09-07, the platform has an explicit documented design for configuration-version lineage.
+
+### Current state
+
+- `strategy_config` contains `configuration_version`, but it is not an immutable identity.
+- `strategy_factor_groups` is keyed by `(strategy_id, factor_group_id)`.
+- `strategy_factors` is keyed by `(strategy_id, feature_id)`.
+- `strategy_feature_configuration` is a derived table.
+- `backtest_runs` is identified by `run_id` and currently references only `strategy_id`.
+- No existing configuration-version or experiment tables were found in the repository/database inspection.
+
+### Target state
+
+Future backtests must be traceable to an immutable configuration version containing the exact factor-group and feature configuration used for the run.
+
+### Implementation status
+
+**Design documented; database implementation not yet started.**
+
+Existing legacy and V2 configurations remain unchanged.

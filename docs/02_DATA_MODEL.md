@@ -236,3 +236,36 @@ This gap must be resolved before production-grade reproducibility is considered 
 6. Historical experiments must be reproducible.
 7. Referential integrity must be enforced at the database level where appropriate.
 8. Research and production execution must remain distinguishable.
+
+## Configuration Version Lineage
+
+### Decision
+
+Strategy configuration must eventually be reproducible through an immutable configuration-version identity.
+
+The current configuration hierarchy remains the working control plane:
+
+`strategy_config -> strategy_factor_groups -> strategy_factors -> metadata.feature_catalog`
+
+However, the existing `configuration_version` column on `strategy_config` is currently an attribute rather than an immutable configuration identity because `strategy_config` is keyed only by `strategy_id`, while factor-group and factor rows are mutable.
+
+### Target lineage
+
+The target architecture is:
+
+`strategy_config`
+→ `strategy_config_version`
+→ versioned factor-group configuration
+→ versioned factor configuration
+→ `backtest_runs`
+→ backtest results
+
+A backtest must ultimately identify the exact configuration version that produced it.
+
+### Migration principle
+
+The existing `strategy_factor_groups`, `strategy_factors`, V2 scoring path, frozen legacy strategy, and existing backtest results must not be disrupted.
+
+Version lineage will therefore be introduced incrementally. Existing configurations will be preserved, and an immutable configuration snapshot will become the basis for future validation and backtesting.
+
+`strategy_feature_configuration` remains a derived projection and must not become the configuration source of truth.

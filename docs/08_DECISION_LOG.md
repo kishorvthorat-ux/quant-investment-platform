@@ -33,3 +33,43 @@ Hard-coded composite scoring formulas for each strategy.
 ### Related Reproducibility Gap
 
 strategy_config already contains configuration_version, but factor configuration and backtest_runs do not yet carry configuration-version lineage. This must be addressed before production-grade historical reproducibility is considered complete.
+
+## DEC-002 — Immutable Configuration Version Lineage
+
+**Date:** 2026-09-07
+**Status:** Accepted
+
+### Context
+
+The platform supports configuration-driven strategies, but the current configuration tables are mutable and do not provide an immutable identity for a complete strategy configuration.
+
+`strategy_config.configuration_version` exists, but `strategy_config` is keyed only by `strategy_id`. Factor groups and factors are also keyed by strategy rather than configuration version. Therefore, the current version number alone does not guarantee historical reproducibility.
+
+### Decision
+
+Introduce an explicit immutable configuration-version lineage model.
+
+A configuration version will represent the exact strategy configuration used for validation, experimentation, and backtesting.
+
+Backtest runs will ultimately reference the configuration version used for execution.
+
+### Rationale
+
+This enables:
+
+- reproducible historical experiments
+- comparison of multiple configurations
+- immutable backtest lineage
+- auditability of production decisions
+- Configure → Validate → Backtest → Compare → Keep/Reject workflow
+
+### Migration constraint
+
+Do not disrupt:
+
+- frozen legacy strategy `M_RD_504010`
+- active configuration-driven strategy `M_RD_504010_V2`
+- existing backtest results
+- existing working scoring and portfolio pipelines
+
+The implementation will proceed incrementally after the target schema is reviewed.

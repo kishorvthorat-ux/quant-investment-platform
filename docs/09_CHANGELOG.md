@@ -32,3 +32,21 @@
 ### Next Controlled Change
 
 Design and implement configuration-version lineage without disrupting the frozen legacy strategy or existing backtest results.
+
+## 2026-09-07 — Configuration Version Lineage Design
+
+### Added
+
+- Documented the configuration-version reproducibility gap.
+- Defined target immutable configuration-version lineage.
+- Defined the relationship between strategy identity, configuration version, factor configuration, and backtest execution.
+
+### Not yet implemented
+
+- No database schema changes have been made.
+- Existing V2 configuration remains unchanged.
+- Existing legacy and backtest results remain unchanged.
+
+### Next controlled change
+
+Design and implement the smallest version-lineage schema that can capture an immutable configuration snapshot without disrupting the existing strategy and backtest framework.
