@@ -69,6 +69,15 @@ sources:
     description: "Analytics and strategy control-plane tables"
 
     tables:
+      - name: strategy_config
+        description: "Strategy-level configuration and lifecycle metadata"
+        columns:
+          - name: strategy_id
+            description: "Unique strategy identifier"
+            tests:
+              - not_null
+              - unique
+
       - name: strategy_factor_groups
         description: "Configured factor groups for each strategy"
         columns:
@@ -137,14 +146,6 @@ sources:
             tests:
               - not_null
 
-      - name: strategy_config
-        description: "Strategy-level configuration and lifecycle metadata"
-        columns:
-          - name: strategy_id
-            description: "Unique strategy identifier"
-            tests:
-              - not_null
-              - unique
 
       - name: strategy_config_version
         description: "Immutable strategy configuration snapshots used for reproducible validation, backtesting, and execution"
@@ -245,15 +246,6 @@ sources:
         columns:
           - name: feature_id
             description: "Unique feature identifier"
-            tests:
-              - not_null
-              - unique
-
-      - name: strategy_config
-        description: "Strategy-level configuration and lifecycle metadata"
-        columns:
-          - name: strategy_id
-            description: "Unique strategy identifier"
             tests:
               - not_null
               - unique

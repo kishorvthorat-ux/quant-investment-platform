@@ -145,3 +145,60 @@ Do not modify:
 ### Next Decision
 
 Determine where lifecycle promotion should be owned and how validation evidence, approval, status transitions, and production eligibility should be recorded.
+
+## DEC-004 — Weekly Signal-Based MVP Execution
+
+**Date:** 2026-09-08
+**Status:** Accepted
+
+### Context
+
+The configuration-driven V2 scoring pipeline required an explicit execution model for short-term swing trading. The intended behavior is to generate signals weekly, enter on the next trading day, and hold positions until the next signal.
+
+A fixed holding-period or unconditional weekly rebalance would not represent the intended signal-based strategy.
+
+### Decision
+
+Use weekly signal-based portfolio execution for `M_RD_504010_V2`, configuration `2`.
+
+Execution semantics:
+
+`WEEKLY signal → NEXT_TRADING_DAY entry → TOP-2 → 50%/50% → HOLD → NEXT_SIGNAL`
+
+The weekly signal date is the last available trading day of each calendar week.
+
+Turnover occurs only when the next signal changes target positions.
+
+### Validation
+
+The implementation was behaviorally validated:
+
+- 349 weekly signal dates.
+- First signal: 2020-01-03.
+- Last signal: 2026-09-03.
+- First position: 2020-01-06.
+- Last position: 2026-09-04.
+- 1,307 position dates.
+- 64,039 position rows.
+- Each tested signal selected exactly 2 securities.
+- Each selected security received 50% target weight.
+- 286 active-turnover days were observed.
+- All 286 active-turnover days occurred on entry days.
+- Zero active-turnover days occurred on non-entry holding days.
+- 1,021 of 1,307 position dates had zero turnover (78.12%).
+
+### Rationale
+
+This preserves the intended short-term swing-trading behavior while avoiding unnecessary turnover when the weekly signal remains unchanged.
+
+### Baseline Protection
+
+Configuration `2` is now `VALIDATED` and is treated as the MVP baseline.
+
+Future factor experiments must create new configuration versions and must not mutate the baseline configuration or its immutable snapshot.
+
+### Deferred Work
+
+Factor optimization to improve CAGR and risk-adjusted performance will begin only after the MVP flow is checkpointed.
+
+Lifecycle automation, approval workflows, and production execution controls remain outside the MVP scope.

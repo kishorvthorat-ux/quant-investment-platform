@@ -113,3 +113,19 @@ No legacy strategy, existing backtest result, or live V2 configuration values we
 ### Next Controlled Change
 
 Design the configuration lifecycle and promotion mechanism, including ownership of DRAFT → VALIDATED → FROZEN transitions, while keeping structural validation independent from lifecycle promotion.
+
+## 2026-09-08 — MVP Weekly Signal-Based Execution Baseline
+
+- Finalized weekly signal-based execution semantics for `M_RD_504010_V2` configuration `2`.
+- Weekly signal uses the last available trading day of each calendar week.
+- Entry occurs on the next available trading day.
+- Top 2 securities receive 50% target weight each.
+- Positions are held until the next weekly signal.
+- Turnover occurs only when the new signal changes target positions.
+- Validated 349 signal dates, 1,307 position dates, and 64,039 position rows.
+- Validated 286 active-turnover days, all occurring on entry days; holding days generated zero turnover.
+- Corrected the dbt analytics source definition for `strategy_config`.
+- Full dbt test suite remains green: 155 PASS, 0 WARN, 0 ERROR.
+- Added strategy and backtesting MVP documentation.
+- Established configuration `2` as the protected MVP baseline.
+- Factor optimization, lifecycle automation, approval workflow, and production execution remain deferred until after the MVP checkpoint.
