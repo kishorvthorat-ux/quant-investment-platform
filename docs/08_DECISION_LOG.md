@@ -85,3 +85,63 @@ The immutable configuration-version lineage is now implemented.
 - Existing legacy backtest results were preserved unchanged and linked to their corresponding legacy configuration snapshot.
 
 Remaining work is to review and propagate lineage through downstream backtest results and performance metrics.
+
+## DEC-003 — Separate Snapshot Validation from Lifecycle Promotion
+
+**Date:** 2026-09-08
+**Status:** Accepted
+
+### Context
+
+Immutable configuration snapshots now provide reproducible configuration identity, including strategy-level, factor-group, and factor-level snapshots. Structural dbt tests can verify that a snapshot is internally complete and that configured weights reconcile correctly.
+
+However, structural validity alone does not establish that a configuration should become eligible for production execution.
+
+### Decision
+
+Treat structural validation and lifecycle promotion as separate concerns.
+
+Structural validation will establish whether an immutable configuration snapshot is internally valid.
+
+Lifecycle promotion will explicitly control transitions such as:
+
+`DRAFT → VALIDATED → FROZEN`
+
+A successful validation must not automatically change the lifecycle status.
+
+Production execution will consume only configurations that have reached the appropriate validated/frozen lifecycle state.
+
+### Current State
+
+Configuration `2` (`M_RD_504010_V2`) is structurally valid but remains `DRAFT`.
+
+The following snapshot validations currently pass:
+
+- `strategy_snapshot_group_weights_total`
+- `strategy_snapshot_feature_weights_total`
+- `strategy_snapshot_feature_weights_match_group`
+
+No lifecycle promotion mechanism currently exists in the repository.
+
+### Rationale
+
+Separating these concerns:
+
+- prevents accidental promotion of experimental configurations;
+- preserves explicit human or workflow-controlled decisions;
+- makes the lifecycle auditable;
+- allows validation rules to evolve independently from promotion policy;
+- keeps production execution protected from mutable or insufficiently reviewed research state.
+
+### Migration Constraint
+
+Do not modify:
+
+- frozen legacy strategy `M_RD_504010`;
+- existing legacy backtest results;
+- existing V2 configuration weights;
+- immutable historical configuration snapshots.
+
+### Next Decision
+
+Determine where lifecycle promotion should be owned and how validation evidence, approval, status transitions, and production eligibility should be recorded.

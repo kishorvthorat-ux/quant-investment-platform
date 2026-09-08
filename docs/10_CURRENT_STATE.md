@@ -16,7 +16,7 @@
 ## Strategy State
 
 - M_RD_504010: frozen legacy strategy, configuration version 1.
-- M_RD_504010_V2: active configuration-driven strategy, configuration version 2.
+- M_RD_504010_V2: configuration-driven strategy, immutable configuration version 2 currently remains `DRAFT`.
 - Legacy strategy remains frozen and must not be modified by V2 development.
 
 ## Configuration State
@@ -48,9 +48,26 @@
 3. Backtest result and metric lineage still needs to be reviewed end-to-end beyond `backtest_runs`.
 4. Production orchestration and deployment are not yet finalized.
 
+## Snapshot Validation Status
+
+The immutable configuration snapshot for `M_RD_504010_V2` (`configuration_id = 2`) is structurally complete and has dedicated dbt validation coverage.
+
+- 4 factor groups are present and enabled.
+- 10 configured factors are present and enabled.
+- Enabled factor-group weights sum to `1.000000`.
+- Enabled feature weights sum to `1.000000`.
+- Feature weights reconcile to their configured factor-group weights.
+- `strategy_snapshot_group_weights_total` passes.
+- `strategy_snapshot_feature_weights_total` passes.
+- `strategy_snapshot_feature_weights_match_group` passes.
+
+These tests establish structural validity of the immutable snapshot. They do not promote the configuration through its lifecycle.
+
+Configuration `2` intentionally remains `DRAFT`. No lifecycle promotion mechanism currently exists in the repository, and no automatic DRAFT → VALIDATED → FROZEN transition has been introduced.
+
 ## Next Phase
 
-Propagate configuration-version lineage through the existing backtest and analytics models, while preserving legacy results and keeping production execution dependent only on validated/frozen configuration snapshots. Do not change live V2 weights or legacy results.
+Design the configuration lifecycle and promotion mechanism separately from structural validation, while preserving legacy results and keeping production execution dependent only on validated/frozen configuration snapshots. Do not change live V2 weights or legacy results.
 
 ## Configuration Version Lineage — Implementation Status
 

@@ -3,6 +3,7 @@
 with configured_features as (
 
     select
+        configuration_id,
         strategy_id,
         factor_group_id,
         feature_id,
@@ -23,6 +24,7 @@ feature_values as (
         qf.symbol,
         qf.exchange,
 
+        cf.configuration_id,
         cf.strategy_id,
         cf.factor_group_id,
         cf.feature_id,

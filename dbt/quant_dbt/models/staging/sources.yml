@@ -146,6 +146,95 @@ sources:
               - not_null
               - unique
 
+      - name: strategy_config_version
+        description: "Immutable strategy configuration snapshots used for reproducible validation, backtesting, and execution"
+        columns:
+          - name: configuration_id
+            description: "Immutable configuration snapshot identifier"
+            tests:
+              - not_null
+              - unique
+          - name: strategy_id
+            description: "Strategy identifier"
+            tests:
+              - not_null
+              - relationships:
+                  arguments:
+                    to: source('analytics', 'strategy_config')
+                    field: strategy_id
+          - name: configuration_version
+            description: "Version number within the strategy"
+            tests:
+              - not_null
+          - name: status
+            description: "Lifecycle status of the immutable configuration snapshot"
+            tests:
+              - not_null
+
+      - name: strategy_config_version_factor_group
+        description: "Immutable factor-group configuration snapshots associated with a strategy configuration version"
+        columns:
+          - name: configuration_id
+            description: "Immutable configuration snapshot identifier"
+            tests:
+              - not_null
+              - relationships:
+                  arguments:
+                    to: source('analytics', 'strategy_config_version')
+                    field: configuration_id
+          - name: factor_group_id
+            description: "Factor group identifier"
+            tests:
+              - not_null
+          - name: factor_group_name
+            description: "Human-readable factor group name"
+            tests:
+              - not_null
+          - name: group_weight
+            description: "Weight assigned to the factor group"
+            tests:
+              - not_null
+          - name: enabled
+            description: "Whether the factor group is enabled in this configuration snapshot"
+            tests:
+              - not_null
+
+      - name: strategy_config_version_factor
+        description: "Immutable feature configuration snapshots associated with a strategy configuration version and factor group"
+        columns:
+          - name: configuration_id
+            description: "Immutable configuration snapshot identifier"
+            tests:
+              - not_null
+              - relationships:
+                  arguments:
+                    to: source('analytics', 'strategy_config_version')
+                    field: configuration_id
+          - name: factor_group_id
+            description: "Factor group identifier"
+            tests:
+              - not_null
+          - name: feature_id
+            description: "Feature identifier"
+            tests:
+              - not_null
+              - relationships:
+                  arguments:
+                    to: source('metadata', 'feature_catalog')
+                    field: feature_id
+          - name: feature_weight
+            description: "Weight assigned to the feature"
+            tests:
+              - not_null
+          - name: direction
+            description: "Scoring direction for the feature"
+            tests:
+              - not_null
+          - name: enabled
+            description: "Whether the feature is enabled in this configuration snapshot"
+            tests:
+              - not_null
+
   - name: metadata
     schema: metadata
     description: "Metadata and control-plane tables used by the quantitative platform"

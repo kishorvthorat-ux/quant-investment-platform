@@ -2,6 +2,8 @@ with gross_returns as (
 
     select
         trade_date,
+        configuration_id,
+        strategy_id,
         portfolio_daily_return
     from {{ ref('portfolio_daily_returns_v2') }}
 
@@ -11,6 +13,8 @@ net_returns as (
 
     select
         trade_date,
+        configuration_id,
+        strategy_id,
         portfolio_net_return,
         portfolio_turnover,
         transaction_cost
@@ -22,12 +26,15 @@ gross_growth as (
 
     select
         trade_date,
+        configuration_id,
+        strategy_id,
         portfolio_daily_return,
 
         exp(
             sum(
                 ln(1 + portfolio_daily_return)
             ) over (
+                partition by configuration_id, strategy_id
                 order by trade_date
                 rows between unbounded preceding and current row
             )
@@ -41,6 +48,8 @@ net_growth as (
 
     select
         trade_date,
+        configuration_id,
+        strategy_id,
         portfolio_net_return,
         portfolio_turnover,
         transaction_cost,
@@ -49,6 +58,7 @@ net_growth as (
             sum(
                 ln(1 + portfolio_net_return)
             ) over (
+                partition by configuration_id, strategy_id
                 order by trade_date
                 rows between unbounded preceding and current row
             )
@@ -61,6 +71,9 @@ net_growth as (
 gross_stats as (
 
     select
+        configuration_id,
+        strategy_id,
+
         min(trade_date) as start_date,
         max(trade_date) as end_date,
         count(*) as trading_days,
@@ -71,19 +84,26 @@ gross_stats as (
         max(cumulative_growth) as max_growth,
 
         (
-            select cumulative_growth
-            from gross_growth
-            order by trade_date desc
-            limit 1
-        ) as final_growth
+            array_agg(
+                cumulative_growth
+                order by trade_date desc
+            )
+        )[1] as final_growth
 
     from gross_growth
+
+    group by
+        configuration_id,
+        strategy_id
 
 ),
 
 net_stats as (
 
     select
+        configuration_id,
+        strategy_id,
+
         min(trade_date) as start_date,
         max(trade_date) as end_date,
         count(*) as trading_days,
@@ -92,11 +112,11 @@ net_stats as (
         stddev_samp(portfolio_net_return) as daily_volatility,
 
         (
-            select cumulative_growth
-            from net_growth
-            order by trade_date desc
-            limit 1
-        ) as final_growth,
+            array_agg(
+                cumulative_growth
+                order by trade_date desc
+            )
+        )[1] as final_growth,
 
         sum(portfolio_turnover) as total_turnover,
 
@@ -106,15 +126,22 @@ net_stats as (
 
     from net_growth
 
+    group by
+        configuration_id,
+        strategy_id
+
 ),
 
 gross_drawdown as (
 
     select
         trade_date,
+        configuration_id,
+        strategy_id,
         cumulative_growth,
 
         max(cumulative_growth) over (
+            partition by configuration_id, strategy_id
             order by trade_date
             rows between unbounded preceding and current row
         ) as running_peak
@@ -127,9 +154,12 @@ net_drawdown as (
 
     select
         trade_date,
+        configuration_id,
+        strategy_id,
         cumulative_growth,
 
         max(cumulative_growth) over (
+            partition by configuration_id, strategy_id
             order by trade_date
             rows between unbounded preceding and current row
         ) as running_peak
@@ -141,28 +171,45 @@ net_drawdown as (
 gross_drawdown_stats as (
 
     select
+        configuration_id,
+        strategy_id,
+
         min(
             (cumulative_growth / running_peak) - 1
         ) as max_drawdown
 
     from gross_drawdown
 
+    group by
+        configuration_id,
+        strategy_id
+
 ),
 
 net_drawdown_stats as (
 
     select
+        configuration_id,
+        strategy_id,
+
         min(
             (cumulative_growth / running_peak) - 1
         ) as max_drawdown
 
     from net_drawdown
 
+    group by
+        configuration_id,
+        strategy_id
+
 ),
 
 gross_daily_stats as (
 
     select
+        configuration_id,
+        strategy_id,
+
         max(portfolio_daily_return) as best_day,
         min(portfolio_daily_return) as worst_day,
 
@@ -185,11 +232,18 @@ gross_daily_stats as (
 
     from gross_returns
 
+    group by
+        configuration_id,
+        strategy_id
+
 ),
 
 net_daily_stats as (
 
     select
+        configuration_id,
+        strategy_id,
+
         max(portfolio_net_return) as best_day,
         min(portfolio_net_return) as worst_day,
 
@@ -212,9 +266,17 @@ net_daily_stats as (
 
     from net_returns
 
+    group by
+        configuration_id,
+        strategy_id
+
 )
 
 select
+
+    -- Configuration lineage
+    g.configuration_id,
+    g.strategy_id,
 
     -- Period
     g.start_date,
@@ -309,10 +371,18 @@ select
 
 from gross_stats g
 
-cross join net_stats n
+join net_stats n
+    on g.configuration_id = n.configuration_id
+   and g.strategy_id = n.strategy_id
 
-cross join gross_drawdown_stats gd
+join gross_drawdown_stats gd
+    on g.configuration_id = gd.configuration_id
+   and g.strategy_id = gd.strategy_id
 
-cross join net_drawdown_stats nd
+join net_drawdown_stats nd
+    on g.configuration_id = nd.configuration_id
+   and g.strategy_id = nd.strategy_id
 
-cross join net_daily_stats ng
+join net_daily_stats ng
+    on g.configuration_id = ng.configuration_id
+   and g.strategy_id = ng.strategy_id

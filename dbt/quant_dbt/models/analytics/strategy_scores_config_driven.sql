@@ -7,6 +7,7 @@ with ranked_features as (
         security_id,
         symbol,
         exchange,
+        configuration_id,
         strategy_id,
         factor_group_id,
         feature_id,
@@ -30,6 +31,7 @@ scored_features as (
         security_id,
         symbol,
         exchange,
+        configuration_id,
         strategy_id,
         factor_group_id,
         feature_id,
@@ -56,6 +58,7 @@ group_scores as (
         security_id,
         symbol,
         exchange,
+        configuration_id,
         strategy_id,
         factor_group_id,
 
@@ -68,6 +71,7 @@ group_scores as (
         security_id,
         symbol,
         exchange,
+        configuration_id,
         strategy_id,
         factor_group_id
 
@@ -80,6 +84,7 @@ strategy_scores as (
         security_id,
         symbol,
         exchange,
+        configuration_id,
         strategy_id,
 
         sum(factor_group_score) as composite_score
@@ -91,6 +96,7 @@ strategy_scores as (
         security_id,
         symbol,
         exchange,
+        configuration_id,
         strategy_id
 
 )
@@ -100,6 +106,7 @@ select
     security_id,
     symbol,
     exchange,
+    configuration_id,
     strategy_id,
     composite_score
 

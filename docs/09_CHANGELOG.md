@@ -76,3 +76,40 @@ Design and implement the smallest version-lineage schema that can capture an imm
 ### Next controlled change
 
 Inspect `strategy_factor_groups` and add the smallest versioned factor-group snapshot under `strategy_config_version`. Do not recreate `strategy_config_version`.
+
+## 2026-09-08 — Immutable Configuration Snapshot Validation
+
+### Added
+
+- Dedicated dbt validation tests for immutable configuration snapshots.
+- Validation of enabled factor-group weights across each configuration.
+- Validation of enabled feature weights across each configuration.
+- Validation that enabled feature weights reconcile to their configured factor-group weights.
+
+### Validated
+
+The immutable snapshot for `M_RD_504010_V2` (`configuration_id = 2`) is structurally complete:
+
+- 4 enabled factor groups.
+- 10 enabled configured factors.
+- Factor-group weights sum to `1.000000`.
+- Feature weights sum to `1.000000`.
+- Feature weights reconcile to their factor-group weights.
+
+The following dbt tests pass:
+
+- `strategy_snapshot_group_weights_total`
+- `strategy_snapshot_feature_weights_total`
+- `strategy_snapshot_feature_weights_match_group`
+
+### Lifecycle Boundary
+
+Structural validation does not automatically promote a configuration through its lifecycle.
+
+Configuration `2` intentionally remains `DRAFT`. No lifecycle promotion mechanism currently exists in the repository.
+
+No legacy strategy, existing backtest result, or live V2 configuration values were changed by this validation work.
+
+### Next Controlled Change
+
+Design the configuration lifecycle and promotion mechanism, including ownership of DRAFT → VALIDATED → FROZEN transitions, while keeping structural validation independent from lifecycle promotion.
