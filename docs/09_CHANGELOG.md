@@ -1,5 +1,16 @@
 # Quant Investment Platform — Changelog
 
+## 2026-09-09 — Dagster MVP Orchestration Validated
+
+- Added local Dagster orchestration for the existing MVP data-to-performance flow.
+- Validated NSE official trading-calendar ingestion and PostgreSQL loading through Dagster.
+- Validated Yahoo market-data ingestion and PostgreSQL market-price loading through Dagster.
+- Validated the downstream dbt V2 performance build through Dagster.
+- Confirmed the refreshed end-to-end flow without changing factor definitions, factor weights, scoring logic, or MVP execution semantics.
+- Established Dagster MVP orchestration as a completed checkpoint.
+- Factor optimization is now the next phase; schedules, sensors, cloud deployment, broker integration, lifecycle automation, and approval workflows remain deferred.
+
+
 ## 2026-09-07 — Configuration-Driven Strategy Foundation
 
 ### Added

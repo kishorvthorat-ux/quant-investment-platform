@@ -227,3 +227,35 @@ Lifecycle automation, approval workflows, and production execution controls rema
 **Impact:** The calendar integration is now part of the reproducible MVP baseline. Existing factor definitions, factor weights, scoring logic, and weekly signal semantics are unchanged.
 
 **Status:** Implemented and validated.
+
+## DEC-006 — Dagster MVP Orchestration
+
+**Decision:** Use Dagster as the local orchestration layer for the existing validated MVP flow without changing the underlying strategy, factor definitions, scoring logic, or execution semantics.
+
+### Scope
+
+Dagster currently orchestrates:
+
+1. NSE official trading-calendar ingestion
+2. Yahoo market-data ingestion
+3. PostgreSQL market-price loading
+4. PostgreSQL official-calendar loading
+5. dbt V2 feature, scoring, ranking, portfolio, turnover, cost, and performance build
+
+### Validation
+
+The complete local orchestration flow was independently materialized and validated successfully:
+
+- NSE trading-calendar ingestion: PASS
+- Official trading-calendar PostgreSQL load: PASS
+- Yahoo market-data ingestion: PASS
+- Market-price PostgreSQL load: PASS
+- dbt V2 performance build: PASS
+
+The refreshed market data reached 2026-09-09 and the resulting performance metrics remained consistent with the established MVP behavior.
+
+### MVP boundary
+
+Dagster scheduling, sensors, cloud deployment, broker integration, automated production execution, lifecycle automation, and approval workflows remain deferred.
+
+**Impact:** The MVP now has a reproducible local orchestration path while preserving the existing strategy and configuration model. Factor optimization is the next R&D phase and must use new experiment configurations rather than modifying the protected MVP baseline.

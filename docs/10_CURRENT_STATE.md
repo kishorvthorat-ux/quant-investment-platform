@@ -186,7 +186,7 @@ All 10 configured V2 features become simultaneously available for a security fro
 
 ### Baseline protection
 
-`M_RD_504010_V2` configuration `2` is the frozen-in-design MVP baseline but remains lifecycle `VALIDATED` rather than `FROZEN` until the explicit MVP checkpoint decision is completed.
+`M_RD_504010_V2` configuration `2` is the protected MVP baseline and remains lifecycle `VALIDATED` for MVP purposes. The functional MVP and Dagster orchestration checkpoints are now completed.
 
 Factor optimization must use new configuration versions and must not modify configuration `2`.
 
@@ -194,7 +194,7 @@ Factor optimization must use new configuration versions and must not modify conf
 
 The immediate objective is to finalize the baseline flow and establish a reproducible checkpoint.
 
-Deferred until after the MVP checkpoint:
+Deferred until after the completed MVP and Dagster orchestration checkpoints:
 
 - factor optimization
 - CAGR improvement experiments
@@ -202,3 +202,25 @@ Deferred until after the MVP checkpoint:
 - approval workflow
 - production order execution
 - production orchestration
+
+## Dagster MVP Orchestration — 2026-09-09
+
+The existing MVP flow is now orchestrated and validated locally through Dagster.
+
+Flow:
+
+`NSE Official Calendar → Market Data → PostgreSQL → dbt → Features → MTRD Scoring → Rankings → Weekly Signals → Portfolio Positions → Turnover / Costs → Performance Metrics`
+
+Validated Dagster assets:
+
+- `nse_trading_calendar`
+- `postgres_trading_calendar`
+- `yahoo_market_data`
+- `postgres_market_prices`
+- `dbt_v2_performance_build`
+
+All five execution steps completed successfully.
+
+Dagster remains a local/manual MVP orchestration layer. Scheduling, sensors, cloud deployment, broker integration, automated production execution, lifecycle automation, and approval workflows remain outside the MVP scope.
+
+The next phase is factor optimization and quant R&D. Configuration `2` remains the protected MVP baseline and must not be mutated during experimentation.
