@@ -1,4 +1,5 @@
 select
+    configuration_id,
     strategy_id,
     factor_group_id,
     group_weight,
@@ -8,6 +9,7 @@ where feature_enabled = true
   and factor_group_enabled = true
   and feature_catalog_enabled = true
 group by
+    configuration_id,
     strategy_id,
     factor_group_id,
     group_weight

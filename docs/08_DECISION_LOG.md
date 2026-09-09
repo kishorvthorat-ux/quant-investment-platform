@@ -202,3 +202,28 @@ Future factor experiments must create new configuration versions and must not mu
 Factor optimization to improve CAGR and risk-adjusted performance will begin only after the MVP flow is checkpointed.
 
 Lifecycle automation, approval workflows, and production execution controls remain outside the MVP scope.
+
+---
+
+## DEC-005 Official NSE Trading Calendar Integration
+
+**Decision:** Use the official NSE trading calendar as the authoritative source for trading-day determination in the MVP.
+
+**Rationale:**
+- Trading days must not be inferred solely from observed market-price data.
+- Exchange holidays and special sessions need an explicit calendar source.
+- The architecture therefore separates the trading calendar from the price-data source.
+
+**Architecture:**
+- `metadata.trading_calendar` — authoritative NSE calendar.
+- `raw.trading_calendar` — compatibility mirror for the existing staging layer.
+- `stg_trading_calendar` — existing staging interface.
+- Yahoo Finance remains the market-price source.
+
+**Current coverage:** 2020-01-01 through 2026-12-31.
+
+**MVP treatment:** Standard NSE sessions are represented using the official trading calendar. Special-session timing beyond the current MVP representation can be refined later without changing the core architecture.
+
+**Impact:** The calendar integration is now part of the reproducible MVP baseline. Existing factor definitions, factor weights, scoring logic, and weekly signal semantics are unchanged.
+
+**Status:** Implemented and validated.

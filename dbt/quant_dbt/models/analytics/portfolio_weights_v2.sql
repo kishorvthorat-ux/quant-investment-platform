@@ -18,8 +18,11 @@ configurations as (
 
     select
         configuration_id,
+        top_n,
         position_weight
     from {{ source('analytics', 'strategy_config_version') }}
+
+    where status in ('VALIDATED', 'FROZEN')
 
 )
 
@@ -35,11 +38,12 @@ select
     r.selected_flag,
 
     case
-        when r.selected_flag = true then c.position_weight
+        when r.selected_flag = true
+            then 1.0 / c.top_n
         else 0.0
     end as target_weight
 
 from rankings r
 
-join configurations c
+inner join configurations c
     on r.configuration_id = c.configuration_id

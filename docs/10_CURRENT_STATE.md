@@ -163,16 +163,20 @@ Validation results:
 
 ### Baseline performance
 
-Current V2 baseline:
+Current V2 baseline and breadth research state:
 
-- Net return: 120.38%
-- Net CAGR: 12.61%
-- Net volatility: 24.32%
-- Net Sharpe: 0.75
-- Net maximum drawdown: -27.78%
-- Total turnover: 185.00
-- Transaction cost: 37.00%
-- Net win rate: 52.49%
+| Configuration | Breadth | Net CAGR | Net Sharpe | Net Max DD | Total Turnover |
+|---|---:|---:|---:|---:|---:|
+| Config 2 | Top-2 | 12.5855% | 0.7514 | -27.7816% | 183.5000 |
+| Config 3 | Top-4 | 15.7911% | 1.0099 | -25.7469% | 154.5000 |
+| Config 4 | Top-5 | 18.0002% | 1.1628 | -26.8856% | 139.7000 |
+| Config 5 | Top-6 | 14.8902% | 1.0215 | -25.4254% | 133.0000 |
+
+Config 2 remains the MVP baseline. Configurations 3-5 are immutable breadth experiments and must not be treated as production promotion decisions.
+
+The authoritative trading calendar is `metadata.trading_calendar`, sourced from the official NSE calendar. `raw.trading_calendar` is maintained as a compatibility mirror for the existing staging model. The current calendar covers 2020-01-01 through 2026-12-31.
+
+The baseline remains weekly signal-based execution: signal on the last available trading day of each calendar week, enter on the next available trading day, and hold until the next signal.
 
 The baseline is a research result and is not yet considered proof of production profitability.
 

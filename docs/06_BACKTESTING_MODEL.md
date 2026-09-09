@@ -38,28 +38,20 @@ Transaction costs are applied to turnover to derive net returns. The current bas
 
 ## Baseline Performance
 
-Current V2 baseline backtest results:
+Current V2 breadth comparison after official NSE calendar integration:
 
-| Metric | Value |
-|---|---:|
-| Evaluation period | 2020-01-06 to 2026-09-02 |
-| Trading days | 1,306 |
-| Gross return | 218.89% |
-| Gross CAGR | 19.03% |
-| Gross volatility | 24.34% |
-| Gross Sharpe | 1.04 |
-| Gross max drawdown | -27.62% |
-| Net return | 120.38% |
-| Net CAGR | 12.61% |
-| Net volatility | 24.32% |
-| Net Sharpe | 0.75 |
-| Net max drawdown | -27.78% |
-| Total turnover | 185.00 |
-| Annualized turnover | 3,569.68% |
-| Transaction cost | 37.00% |
-| Net win rate | 52.49% |
+| Configuration | Breadth | Gross CAGR | Net CAGR | Net Sharpe | Net Max DD | Total Turnover | Transaction Cost |
+|---|---:|---:|---:|---:|---:|---:|---:|
+| Config 2 | Top-2 | 18.9588% | 12.5855% | 0.7514 | -27.7816% | 183.5000 | 36.7000% |
+| Config 3 | Top-4 | 21.2889% | 15.7911% | 1.0099 | -25.7469% | 154.5000 | 30.9000% |
+| Config 4 | Top-5 | 23.0550% | 18.0002% | 1.1628 | -26.8856% | 139.7000 | 27.9400% |
+| Config 5 | Top-6 | 19.5725% | 14.8902% | 1.0215 | -25.4254% | 133.0000 | 26.6000% |
 
-These figures are a **baseline research result, not a claim of production profitability**.
+The official NSE trading calendar is now authoritative for trading-day determination. Yahoo Finance remains the market-price source. The calendar integration changes the reproducibility foundation but does not alter the weekly signal definition.
+
+These figures are research/backtest results, not evidence of guaranteed future profitability.
+
+ a **baseline research result, not a claim of production profitability**.
 
 ## Year-by-Year Net Results
 
