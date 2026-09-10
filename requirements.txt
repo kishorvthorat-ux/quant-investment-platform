@@ -76,3 +76,4 @@ urllib3==2.7.0
 websockets==17.1
 yfinance==1.7.0
 zipp==4.1.0
+streamlit==1.63.0

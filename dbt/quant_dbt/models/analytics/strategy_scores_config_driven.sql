@@ -16,7 +16,7 @@ with ranked_features as (
         feature_value,
 
         percent_rank() over (
-            partition by strategy_id, trade_date, feature_id
+            partition by strategy_id, trade_date, configuration_id, feature_id
             order by feature_value
         ) as feature_rank
 
