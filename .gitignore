@@ -36,3 +36,9 @@ logs/
 # Temporary
 tmp/
 temp/
+
+# Dagster local runtime
+.dagster_home/
+
+# Local backups
+*.backup

@@ -81,7 +81,11 @@ def postgres_trading_calendar():
 def dbt_v2_performance_build():
     return run_dbt()
 
-
+daily_quant_pipeline = dg.ScheduleDefinition(
+    name="daily_quant_pipeline",
+    cron_schedule="30 15 * * 1-5",
+    target=[dbt_v2_performance_build],
+)
 defs = dg.Definitions(
     assets=[
         yahoo_market_data,
@@ -90,4 +94,5 @@ defs = dg.Definitions(
         postgres_trading_calendar,
         dbt_v2_performance_build,
     ],
+    schedules=[daily_quant_pipeline],
 )
