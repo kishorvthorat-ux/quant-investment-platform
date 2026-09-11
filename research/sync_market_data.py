@@ -23,7 +23,7 @@ DUCKDB_PATH.parent.mkdir(parents=True, exist_ok=True)
 with psycopg.connect(**pg_config) as pg:
     with pg.cursor() as cur:
             with open(TEMP_CSV, "w", encoding="utf-8") as f:
-                with cur.copy("""COPY (SELECT trade_date, symbol, exchange, open, high, low, close, volume FROM raw.market_prices ORDER BY trade_date, symbol) TO STDOUT WITH CSV HEADER""") as copy:
+                with cur.copy("""COPY (SELECT trade_date, symbol, exchange, open, high, low, close, adjusted_close, volume FROM raw.market_prices ORDER BY trade_date, symbol) TO STDOUT WITH CSV HEADER""") as copy:
                     for data in copy:
                         f.write(bytes(data).decode("utf-8"))
 
@@ -39,6 +39,7 @@ with duckdb.connect(str(DUCKDB_PATH)) as con:
             high::DOUBLE AS high,
             low::DOUBLE AS low,
             close::DOUBLE AS close,
+            adjusted_close::DOUBLE AS adjusted_close,
             volume::BIGINT AS volume
         FROM read_csv_auto(?)
     """, [str(TEMP_CSV)])

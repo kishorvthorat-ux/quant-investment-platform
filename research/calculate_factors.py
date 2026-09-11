@@ -14,8 +14,8 @@ with duckdb.connect(str(DUCKDB_PATH)) as con:
                 trade_date,
                 symbol,
                 exchange,
-                close,
-                LAG(close) OVER (
+                adjusted_close AS close,
+                LAG(adjusted_close) OVER (
                     PARTITION BY symbol ORDER BY trade_date
                 ) AS previous_close
             FROM analytics.main.market_prices
