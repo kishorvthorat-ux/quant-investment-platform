@@ -1,8 +1,29 @@
+import subprocess
+import sys
+from pathlib import Path
+
 import streamlit as st
 import pandas as pd
 
-#from db import query_df
 from db import query_df, query_duckdb
+
+def safe_int(value):
+    if value is None or pd.isna(value):
+        return None
+    return int(value)
+
+
+PROJECT_ROOT = Path(__file__).resolve().parent.parent
+
+if str(PROJECT_ROOT) not in sys.path:
+    sys.path.insert(0, str(PROJECT_ROOT))
+
+from research.run_experiment import (
+    run_custom_experiment,
+    DEFAULT_GROUP_WEIGHTS,
+    DEFAULT_FACTOR_WEIGHTS,
+    FACTOR_GROUPS,
+)
 
 st.set_page_config(
     page_title="Quant Investment Platform",
@@ -460,10 +481,217 @@ with tab_rnd:
 
     st.header("R&D Experiment Review")
 
+    # ========================================================
+    # CUSTOM R&D EXPERIMENT RUNNER
+    # ========================================================
+
+    st.subheader("🧪 Custom R&D Experiment")
+
+    st.caption(
+        "Adjust research parameters and run a new experiment. "
+        "These settings affect R&D only and never modify the "
+        "production strategy configuration."
+    )
+
+    with st.expander("⚖️ Factor Group Weights", expanded=True):
+
+        group_cols = st.columns(4)
+
+        group_weights = {}
+
+        group_labels = {
+            "MOMENTUM": "Momentum",
+            "TREND": "Trend",
+            "RISK": "Risk",
+            "DRAWDOWN": "Drawdown",
+        }
+
+        for col, group in zip(group_cols, DEFAULT_GROUP_WEIGHTS):
+
+            group_weights[group] = col.number_input(
+                group_labels[group],
+                min_value=0.0,
+                max_value=1.0,
+                value=float(DEFAULT_GROUP_WEIGHTS[group]),
+                step=0.01,
+                format="%.2f",
+                key=f"rnd_group_{group}",
+            )
+
+        group_total = sum(group_weights.values())
+
+        if group_total <= 0:
+            st.error(
+                "At least one factor group must have a weight greater than zero."
+            )
+
+        st.caption(
+            f"Group weight total: {group_total:.2f} "
+            "(the research engine normalizes weights before scoring)"
+        )
+
+    with st.expander("🔬 Individual Factor Weights", expanded=False):
+
+        factor_weights = {}
+
+        factor_labels = {
+            "return_20d": "Return 20D",
+            "return_60d": "Return 60D",
+            "return_252d": "Return 252D",
+            "price_vs_ma_20d": "Price vs MA 20D",
+            "price_vs_ma_60d": "Price vs MA 60D",
+            "price_vs_ma_252d": "Price vs MA 252D",
+            "volatility_20d": "Volatility 20D",
+            "volatility_60d": "Volatility 60D",
+            "volatility_252d": "Volatility 252D",
+            "drawdown_252d": "Drawdown 252D",
+        }
+
+        for group in FACTOR_GROUPS:
+
+            st.markdown(f"**{group_labels[group]}**")
+
+            factor_cols = st.columns(len(FACTOR_GROUPS[group]))
+
+            for col, factor in zip(
+                factor_cols,
+                FACTOR_GROUPS[group],
+            ):
+
+                enabled = col.checkbox(
+                    "Enabled",
+                    value=True,
+                    key=f"rnd_enabled_{factor}",
+                )
+
+                if enabled:
+                    factor_weights[factor] = col.number_input(
+                        factor_labels[factor],
+                        min_value=0.0,
+                        max_value=1.0,
+                        value=float(DEFAULT_FACTOR_WEIGHTS[factor]),
+                        step=0.01,
+                        format="%.2f",
+                        key=f"rnd_factor_{factor}",
+                    )
+                else:
+                    factor_weights[factor] = 0.0
+
+    with st.expander("⚙️ Backtest Settings", expanded=True):
+
+        settings_col1, settings_col2 = st.columns(2)
+
+        top_n = settings_col1.number_input(
+            "Top N positions",
+            min_value=1,
+            max_value=20,
+            value=2,
+            step=1,
+            key="rnd_top_n",
+        )
+
+        transaction_cost_pct = settings_col2.number_input(
+            "Transaction cost (%)",
+            min_value=0.0,
+            max_value=5.0,
+            value=0.20,
+            step=0.05,
+            format="%.2f",
+            key="rnd_transaction_cost",
+        )
+
+        transaction_cost_rate = transaction_cost_pct / 100.0
+
+    st.divider()
+
+    run_rnd = st.button(
+        "▶ Run R&D Experiment",
+        type="primary",
+        use_container_width=True,
+        key="run_custom_rnd",
+    )
+
+    if run_rnd:
+
+        if group_total <= 0:
+
+            st.error(
+                "Cannot run experiment: all factor-group weights are zero."
+            )
+
+        elif not any(
+            weight > 0
+            for weight in factor_weights.values()
+        ):
+
+            st.error(
+                "Cannot run experiment: at least one factor must be enabled."
+            )
+
+        else:
+
+            try:
+
+                with st.spinner(
+                    "Running R&D experiment and evaluating results..."
+                ):
+
+                    experiment_id = run_custom_experiment(
+                        group_weights=group_weights,
+                        factor_weights=factor_weights,
+                        top_n=int(top_n),
+                        transaction_cost_rate=transaction_cost_rate,
+                    )
+
+                    evaluation = subprocess.run(
+                        [
+                            sys.executable,
+                            str(
+                                PROJECT_ROOT
+                                / "research"
+                                / "evaluate_experiments.py"
+                            ),
+                        ],
+                        cwd=str(PROJECT_ROOT),
+                        capture_output=True,
+                        text=True,
+                        check=True,
+                    )
+
+                st.success(
+                    f"R&D experiment completed: {experiment_id}"
+                )
+
+                st.session_state["rnd_last_experiment"] = experiment_id
+                st.session_state["rnd_evaluation_output"] = evaluation.stdout
+
+                st.rerun()
+
+            except subprocess.CalledProcessError as e:
+
+                st.error(
+                    "R&D experiment was created, but evaluation failed."
+                )
+
+                st.code(
+                    e.stdout + "\n" + e.stderr,
+                    language="text",
+                )
+
+            except Exception as e:
+
+                st.error(
+                    f"Unable to run R&D experiment: {e}"
+                )
+
     st.caption(
         "Research-only experiment analysis. "
         "Production strategy configurations are not modified from this tab."
     )
+
+    # ========================================================
+    # R&D REVIEW
+    # ========================================================
 
     try:
 
@@ -493,409 +721,794 @@ with tab_rnd:
         )
 
         if batch_info.empty:
+
             st.info("No R&D experiments available.")
-            st.stop()
-
-        batch = batch_info.iloc[0]
-
-        col1, col2, col3, col4 = st.columns(4)
-
-        col1.metric(
-            "Latest Batch",
-            str(batch["batch_id"]),
-        )
-
-        col2.metric(
-            "Experiments",
-            int(batch["experiment_count"]),
-        )
-
-        col3.metric(
-            "Completed",
-            int(batch["completed_count"]),
-        )
-
-        col4.metric(
-            "Non-completed",
-            int(batch["non_completed_count"]),
-        )
-
-        st.caption(
-            f"Batch created: {batch['batch_created_at']}"
-        )
-
-        # ----------------------------------------------------
-        # Experiment comparison
-        # ----------------------------------------------------
-
-        st.subheader("Experiment Comparison")
-
-        evaluations = query_duckdb(
-            """
-            SELECT
-                e.experiment_id,
-                e.experiment_type,
-                e.experiment_name,
-                r.status,
-                e.net_return_pct,
-                e.net_cagr_pct,
-                e.net_sharpe,
-                e.net_max_drawdown_pct,
-                e.net_win_rate_pct,
-                e.turnover_pct,
-                e.transaction_cost_pct,
-                e.delta_cagr_pct,
-                e.delta_sharpe
-            FROM analytics.main.experiment_evaluations e
-            JOIN analytics.main.experiment_runs r
-              ON e.experiment_id = r.experiment_id
-            WHERE split_part(e.experiment_id, '_', 1) = ?
-            ORDER BY
-                CASE
-                    WHEN e.experiment_name =
-                        'FACTOR_ABLATION_BASELINE_None'
-                    THEN 0
-                    ELSE 1
-                END,
-                e.net_cagr_pct DESC
-            """,
-            [str(batch["batch_id"])],
-        )
-
-        if evaluations.empty:
-            st.info(
-                "No evaluated experiments found for the latest batch."
-            )
 
         else:
 
-            comparison = evaluations.copy()
+            batch = batch_info.iloc[0]
+            batch_id = str(batch["batch_id"])
 
-            comparison["Experiment"] = comparison[
-                "experiment_name"
-            ]
-
-            comparison["Type"] = comparison[
-                "experiment_type"
-            ]
-
-            comparison["Status"] = comparison[
-                "status"
-            ]
-
-            comparison["Net Return %"] = comparison[
-                "net_return_pct"
-            ].round(2)
-
-            comparison["CAGR %"] = comparison[
-                "net_cagr_pct"
-            ].round(2)
-
-            comparison["Sharpe"] = comparison[
-                "net_sharpe"
-            ].round(2)
-
-            comparison["Max Drawdown %"] = comparison[
-                "net_max_drawdown_pct"
-            ].round(2)
-
-            comparison["Win Rate %"] = comparison[
-                "net_win_rate_pct"
-            ].round(2)
-
-            comparison["Turnover %"] = comparison[
-                "turnover_pct"
-            ].round(2)
-
-            comparison["Transaction Cost %"] = comparison[
-                "transaction_cost_pct"
-            ].round(2)
-
-            comparison["Δ CAGR"] = comparison[
-                "delta_cagr_pct"
-            ].round(2)
-
-            comparison["Δ Sharpe"] = comparison[
-                "delta_sharpe"
-            ].round(2)
-
-            display_columns = [
-                "Experiment",
-                "Type",
-                "Status",
-                "Net Return %",
-                "CAGR %",
-                "Sharpe",
-                "Max Drawdown %",
-                "Win Rate %",
-                "Turnover %",
-                "Transaction Cost %",
-                "Δ CAGR",
-                "Δ Sharpe",
-            ]
-
-            st.dataframe(
-                comparison[display_columns],
-                use_container_width=True,
-                hide_index=True,
-            )
-
-        # ----------------------------------------------------
-        # Baseline comparison
-        # ----------------------------------------------------
-
-        st.subheader("Baseline Comparison")
-
-        baseline = evaluations[
-            evaluations["experiment_name"]
-            == "FACTOR_ABLATION_BASELINE_None"
-        ]
-
-        if baseline.empty:
-            st.warning(
-                "Explicit R&D baseline was not found in this batch."
-            )
-
-        else:
-
-            baseline_row = baseline.iloc[0]
+            st.subheader("📦 Latest R&D Batch")
 
             col1, col2, col3, col4 = st.columns(4)
 
             col1.metric(
-                "Baseline CAGR",
-                f"{baseline_row['net_cagr_pct']:.2f}%",
+                "Batch",
+                batch_id,
             )
 
             col2.metric(
-                "Baseline Sharpe",
-                f"{baseline_row['net_sharpe']:.2f}",
+                "Experiments",
+                int(batch["experiment_count"]),
             )
 
             col3.metric(
-                "Baseline Max DD",
-                f"{baseline_row['net_max_drawdown_pct']:.2f}%",
+                "Completed",
+                int(batch["completed_count"]),
             )
 
             col4.metric(
-                "Baseline Net Return",
-                f"{baseline_row['net_return_pct']:.2f}%",
+                "Non-completed",
+                int(batch["non_completed_count"]),
             )
 
             st.caption(
-                "All Δ values are measured against "
-                "FACTOR_ABLATION_BASELINE_None."
+                f"Batch created: {batch['batch_created_at']}"
             )
 
-        # ----------------------------------------------------
-        # Experiment detail
-        # ----------------------------------------------------
+            # ------------------------------------------------
+            # Evaluation results
+            # ------------------------------------------------
 
-        st.subheader("Experiment Detail")
-
-        experiment_options = evaluations[
-            [
-                "experiment_id",
-                "experiment_name",
-            ]
-        ].drop_duplicates()
-
-        selected_experiment = st.selectbox(
-            "Experiment",
-            experiment_options["experiment_id"].tolist(),
-            format_func=lambda x: (
-                experiment_options.loc[
-                    experiment_options["experiment_id"] == x,
-                    "experiment_name",
-                ].iloc[0]
-            ),
-            key="rnd_experiment",
-        )
-
-        selected_eval = evaluations[
-            evaluations["experiment_id"] == selected_experiment
-        ].iloc[0]
-
-        experiment = query_duckdb(
-            """
-            SELECT
-                experiment_id,
-                experiment_name,
-                experiment_type,
-                parameter_name,
-                parameter_value,
-                top_n,
-                transaction_cost_rate,
-                group_weights_json,
-                factor_weights_json,
-                status,
-                created_at
-            FROM analytics.main.experiment_runs
-            WHERE experiment_id = ?
-            """,
-            [selected_experiment],
-        )
-
-        factors = query_duckdb(
-            """
-            SELECT
-                factor_group,
-                feature_id,
-                weight,
-                direction,
-                enabled
-            FROM analytics.main.experiment_run_factors
-            WHERE experiment_id = ?
-            ORDER BY factor_group, feature_id
-            """,
-            [selected_experiment],
-        )
-
-        yearly = query_duckdb(
-            """
-            SELECT
-                year,
-                return_pct,
-                weeks
-            FROM analytics.main.experiment_yearly_results
-            WHERE experiment_id = ?
-            ORDER BY year
-            """,
-            [selected_experiment],
-        )
-
-        if not experiment.empty:
-
-            exp = experiment.iloc[0]
-
-            col1, col2, col3, col4 = st.columns(4)
-
-            col1.metric(
-                "Experiment Type",
-                str(exp["experiment_type"]),
+            evaluations = query_duckdb(
+                """
+                SELECT
+                    e.experiment_id,
+                    e.experiment_type,
+                    e.experiment_name,
+                    e.top_n,
+                    r.transaction_cost_rate,
+                    r.status,
+                    e.start_date,
+                    e.end_date,
+                    e.weeks,
+                    e.net_return_pct,
+                    e.net_cagr_pct,
+                    e.net_sharpe,
+                    e.net_max_drawdown_pct,
+                    e.net_win_rate_pct,
+                    e.gross_return_pct,
+                    e.transaction_cost_pct,
+                    e.turnover_pct,
+                    e.avg_weekly_turnover_pct,
+                    e.delta_cagr_pct,
+                    e.delta_sharpe,
+                    e.evaluated_at
+                FROM analytics.main.experiment_evaluations e
+                JOIN analytics.main.experiment_runs r
+                  ON e.experiment_id = r.experiment_id
+                WHERE split_part(e.experiment_id, '_', 1) = ?
+                ORDER BY
+                    CASE
+                        WHEN e.experiment_name =
+                            'FACTOR_ABLATION_BASELINE_None'
+                        THEN 0
+                        ELSE 1
+                    END,
+                    e.net_cagr_pct DESC
+                """,
+                [batch_id],
             )
 
-            col2.metric(
-                "Top N",
-                int(exp["top_n"]),
-            )
+            if evaluations.empty:
 
-            col3.metric(
-                "Net CAGR",
-                f"{selected_eval['net_cagr_pct']:.2f}%",
-            )
+                st.info(
+                    "No evaluated experiments found for the latest batch."
+                )
 
-            col4.metric(
-                "Sharpe",
-                f"{selected_eval['net_sharpe']:.2f}",
-            )
+            else:
 
-            detail = pd.DataFrame(
-                {
-                    "Parameter": [
-                        "Experiment ID",
-                        "Parameter Name",
-                        "Parameter Value",
-                        "Transaction Cost",
-                        "Status",
-                        "Created At",
-                    ],
-                    "Value": [
-                        exp["experiment_id"],
-                        exp["parameter_name"],
-                        exp["parameter_value"],
-                        f"{exp['transaction_cost_rate'] * 100:.2f}%",
-                        exp["status"],
-                        exp["created_at"],
-                    ],
-                }
-            )
+                # ============================================
+                # IDENTIFY BASELINE AND CANDIDATE
+                # ============================================
 
-            st.dataframe(
-                detail,
-                use_container_width=True,
-                hide_index=True,
-            )
-
-        # ----------------------------------------------------
-        # Factor configuration
-        # ----------------------------------------------------
-
-        if not factors.empty:
-
-            st.markdown("**Factor Configuration**")
-
-            factor_display = factors.copy()
-
-            factor_display["Direction"] = factor_display[
-                "direction"
-            ].map(
-                {
-                    1: "Positive",
-                    -1: "Negative",
-                }
-            )
-
-            factor_display["Weight"] = (
-                factor_display["weight"] * 100
-            ).round(2)
-
-            factor_display = factor_display[
-                [
-                    "factor_group",
-                    "feature_id",
-                    "enabled",
-                    "Weight",
-                    "Direction",
+                baseline_rows = evaluations[
+                    evaluations["experiment_name"]
+                    == "FACTOR_ABLATION_BASELINE_None"
                 ]
-            ].rename(
-                columns={
-                    "factor_group": "Factor Group",
-                    "feature_id": "Feature",
-                    "enabled": "Enabled",
-                }
-            )
 
-            st.dataframe(
-                factor_display,
-                use_container_width=True,
-                hide_index=True,
-            )
+                baseline_row = (
+                    baseline_rows.iloc[0]
+                    if not baseline_rows.empty
+                    else None
+                )
 
-        # ----------------------------------------------------
-        # Yearly performance
-        # ----------------------------------------------------
+                candidate_rows = evaluations[
+                    evaluations["experiment_name"]
+                    != "FACTOR_ABLATION_BASELINE_None"
+                ]
 
-        if not yearly.empty:
+                last_experiment_id = st.session_state.get(
+                    "rnd_last_experiment"
+                )
 
-            st.markdown("**Yearly Performance**")
+                if (
+                    last_experiment_id
+                    and last_experiment_id
+                    in candidate_rows["experiment_id"].values
+                ):
 
-            yearly_display = yearly.rename(
-                columns={
-                    "year": "Year",
-                    "return_pct": "Net Return %",
-                    "weeks": "Weeks",
-                }
-            ).copy()
+                    candidate_row = candidate_rows[
+                        candidate_rows["experiment_id"]
+                        == last_experiment_id
+                    ].iloc[0]
 
-            yearly_display["Net Return %"] = (
-                yearly_display["Net Return %"].round(2)
-            )
+                elif not candidate_rows.empty:
 
-            st.dataframe(
-                yearly_display,
-                use_container_width=True,
-                hide_index=True,
-            )
+                    candidate_row = candidate_rows.iloc[0]
 
-        st.info(
-            "R&D results are for research and human review only. "
-            "Promoting an experiment to production remains a deliberate "
-            "configuration-management decision."
-        )
+                else:
+
+                    candidate_row = None
+
+                # ============================================
+                # BASELINE VS EXPERIMENT
+                # ============================================
+
+                st.subheader("📊 Baseline vs Experiment")
+
+                if (
+                    baseline_row is not None
+                    and candidate_row is not None
+                ):
+
+                    comparison_rows = []
+
+                    metric_definitions = [
+                        ("Gross Return %", "gross_return_pct"),
+                        ("Net Return %", "net_return_pct"),
+                        ("Net CAGR %", "net_cagr_pct"),
+                        ("Sharpe", "net_sharpe"),
+                        (
+                            "Max Drawdown %",
+                            "net_max_drawdown_pct",
+                        ),
+                        (
+                            "Win Rate %",
+                            "net_win_rate_pct",
+                        ),
+                        ("Turnover %", "turnover_pct"),
+                        (
+                            "Avg Weekly Turnover %",
+                            "avg_weekly_turnover_pct",
+                        ),
+                        (
+                            "Transaction Cost %",
+                            "transaction_cost_pct",
+                        ),
+                    ]
+
+                    for label, field in metric_definitions:
+
+                        baseline_value = float(
+                            baseline_row[field]
+                        )
+
+                        candidate_value = float(
+                            candidate_row[field]
+                        )
+
+                        comparison_rows.append(
+                            {
+                                "Metric": label,
+                                "Baseline": round(
+                                    baseline_value,
+                                    2,
+                                ),
+                                "Experiment": round(
+                                    candidate_value,
+                                    2,
+                                ),
+                                "Δ": round(
+                                    candidate_value
+                                    - baseline_value,
+                                    2,
+                                ),
+                            }
+                        )
+
+                    comparison_rows.append(
+                        {
+                            "Metric": "Δ CAGR",
+                            "Baseline": 0.00,
+                            "Experiment": round(
+                                float(
+                                    candidate_row[
+                                        "delta_cagr_pct"
+                                    ]
+                                ),
+                                2,
+                            ),
+                            "Δ": round(
+                                float(
+                                    candidate_row[
+                                        "delta_cagr_pct"
+                                    ]
+                                ),
+                                2,
+                            ),
+                        }
+                    )
+
+                    comparison_rows.append(
+                        {
+                            "Metric": "Δ Sharpe",
+                            "Baseline": 0.00,
+                            "Experiment": round(
+                                float(
+                                    candidate_row[
+                                        "delta_sharpe"
+                                    ]
+                                ),
+                                2,
+                            ),
+                            "Δ": round(
+                                float(
+                                    candidate_row[
+                                        "delta_sharpe"
+                                    ]
+                                ),
+                                2,
+                            ),
+                        }
+                    )
+
+                    st.dataframe(
+                        pd.DataFrame(comparison_rows),
+                        use_container_width=True,
+                        hide_index=True,
+                    )
+
+                    st.caption(
+                        f"Baseline: {baseline_row['experiment_name']}  |  "
+                        f"Experiment: {candidate_row['experiment_name']}"
+                    )
+
+                elif candidate_row is not None:
+
+                    st.warning(
+                        "Experiment found, but the standard R&D baseline "
+                        "is not available for comparison."
+                    )
+
+                # ============================================
+                # YEARLY PERFORMANCE
+                # ============================================
+
+                st.subheader("📅 Yearly Performance")
+
+                yearly_all = query_duckdb(
+                    """
+                    SELECT
+                        experiment_id,
+                        year,
+                        return_pct,
+                        weeks
+                    FROM analytics.main.experiment_yearly_results
+                    WHERE experiment_id IN (
+                        SELECT experiment_id
+                        FROM analytics.main.experiment_evaluations
+                        WHERE split_part(experiment_id, '_', 1) = ?
+                    )
+                    ORDER BY year, experiment_id
+                    """,
+                    [batch_id],
+                )
+
+                if yearly_all.empty:
+
+                    st.info(
+                        "No yearly performance data is available."
+                    )
+
+                elif (
+                    baseline_row is not None
+                    and candidate_row is not None
+                ):
+
+                    baseline_id = baseline_row["experiment_id"]
+                    candidate_id = candidate_row["experiment_id"]
+
+                    yearly_comparison = []
+
+                    years = sorted(
+                        yearly_all["year"].unique()
+                    )
+
+                    for year in years:
+
+                        base = yearly_all[
+                            (
+                                yearly_all["experiment_id"]
+                                == baseline_id
+                            )
+                            & (
+                                yearly_all["year"]
+                                == year
+                            )
+                        ]
+
+                        candidate = yearly_all[
+                            (
+                                yearly_all["experiment_id"]
+                                == candidate_id
+                            )
+                            & (
+                                yearly_all["year"]
+                                == year
+                            )
+                        ]
+
+                        if base.empty or candidate.empty:
+                            continue
+
+                        base_row = base.iloc[0]
+                        candidate_year = candidate.iloc[0]
+
+                        baseline_return = float(
+                            base_row["return_pct"]
+                        )
+
+                        candidate_return = float(
+                            candidate_year["return_pct"]
+                        )
+
+                        yearly_comparison.append(
+                            {
+                                "Year": int(year),
+                                "Baseline Return %": round(
+                                    baseline_return,
+                                    2,
+                                ),
+                                "Experiment Return %": round(
+                                    candidate_return,
+                                    2,
+                                ),
+                                "Δ Return %": round(
+                                    candidate_return
+                                    - baseline_return,
+                                    2,
+                                ),
+                                "Baseline Weeks": safe_int(base_row["weeks"]),
+                                "Experiment Weeks": safe_int(candidate_year["weeks"]),
+                            }
+                        )
+
+                    if yearly_comparison:
+
+                        st.dataframe(
+                            pd.DataFrame(
+                                yearly_comparison
+                            ),
+                            use_container_width=True,
+                            hide_index=True,
+                        )
+
+                    else:
+
+                        st.info(
+                            "Yearly comparison is not available "
+                            "for the selected baseline and experiment."
+                        )
+
+                else:
+
+                    yearly_display = yearly_all.rename(
+                        columns={
+                            "experiment_id": "Experiment",
+                            "year": "Year",
+                            "return_pct": "Return %",
+                            "weeks": "Weeks",
+                        }
+                    ).copy()
+
+                    yearly_display["Return %"] = (
+                        yearly_display["Return %"]
+                        .round(2)
+                    )
+
+                    st.dataframe(
+                        yearly_display,
+                        use_container_width=True,
+                        hide_index=True,
+                    )
+
+                # ============================================
+                # COST & TURNOVER
+                # ============================================
+
+                st.subheader("💰 Cost & Turnover")
+
+                cost_rows = []
+
+                for _, row in evaluations.iterrows():
+
+                    cost_rows.append(
+                        {
+                            "Experiment": row[
+                                "experiment_name"
+                            ],
+                            "Top N": safe_int(row["top_n"]),
+                            "Cost Rate %": round(
+                                float(
+                                    row[
+                                        "transaction_cost_rate"
+                                    ]
+                                )
+                                * 100,
+                                3,
+                            ),
+                            "Gross Return %": round(
+                                float(
+                                    row[
+                                        "gross_return_pct"
+                                    ]
+                                ),
+                                2,
+                            ),
+                            "Net Return %": round(
+                                float(
+                                    row[
+                                        "net_return_pct"
+                                    ]
+                                ),
+                                2,
+                            ),
+                            "Net CAGR %": round(
+                                float(
+                                    row[
+                                        "net_cagr_pct"
+                                    ]
+                                ),
+                                2,
+                            ),
+                            "Turnover %": round(
+                                float(
+                                    row[
+                                        "turnover_pct"
+                                    ]
+                                ),
+                                2,
+                            ),
+                            "Avg Weekly Turnover %": round(
+                                float(
+                                    row[
+                                        "avg_weekly_turnover_pct"
+                                    ]
+                                ),
+                                2,
+                            ),
+                            "Transaction Cost %": round(
+                                float(
+                                    row[
+                                        "transaction_cost_pct"
+                                    ]
+                                ),
+                                2,
+                            ),
+                        }
+                    )
+
+                st.dataframe(
+                    pd.DataFrame(cost_rows),
+                    use_container_width=True,
+                    hide_index=True,
+                )
+
+                # ============================================
+                # CONFIGURATION COMPARISON
+                # ============================================
+
+                st.subheader("⚙️ Configuration Comparison")
+
+                configuration_rows = []
+
+                for _, row in evaluations.iterrows():
+
+                    configuration_rows.append(
+                        {
+                            "Experiment": row[
+                                "experiment_name"
+                            ],
+                            "Type": row[
+                                "experiment_type"
+                            ],
+                            "Top N": safe_int(row["top_n"]),
+                            "Transaction Cost %": round(
+                                float(
+                                    row[
+                                        "transaction_cost_rate"
+                                    ]
+                                )
+                                * 100,
+                                3,
+                            ),
+                            "Start Date": row[
+                                "start_date"
+                            ],
+                            "End Date": row[
+                                "end_date"
+                            ],
+                            "Weeks": safe_int(row["weeks"]),
+                            "Status": row[
+                                "status"
+                            ],
+                        }
+                    )
+
+                st.dataframe(
+                    pd.DataFrame(
+                        configuration_rows
+                    ),
+                    use_container_width=True,
+                    hide_index=True,
+                )
+
+                # ============================================
+                # EXPERIMENT DETAIL
+                # ============================================
+
+                st.subheader("🔬 Experiment Detail")
+
+                experiment_options = evaluations[
+                    [
+                        "experiment_id",
+                        "experiment_name",
+                    ]
+                ].drop_duplicates()
+
+                selected_experiment = st.selectbox(
+                    "Select experiment",
+                    experiment_options[
+                        "experiment_id"
+                    ].tolist(),
+                    format_func=lambda x: (
+                        experiment_options.loc[
+                            experiment_options[
+                                "experiment_id"
+                            ]
+                            == x,
+                            "experiment_name",
+                        ].iloc[0]
+                    ),
+                    key="rnd_experiment",
+                )
+
+                selected_eval = evaluations[
+                    evaluations["experiment_id"]
+                    == selected_experiment
+                ].iloc[0]
+
+                experiment = query_duckdb(
+                    """
+                    SELECT
+                        experiment_id,
+                        experiment_name,
+                        experiment_type,
+                        parameter_name,
+                        parameter_value,
+                        top_n,
+                        transaction_cost_rate,
+                        group_weights_json,
+                        factor_weights_json,
+                        status,
+                        created_at
+                    FROM analytics.main.experiment_runs
+                    WHERE experiment_id = ?
+                    """,
+                    [selected_experiment],
+                )
+
+                factors = query_duckdb(
+                    """
+                    SELECT
+                        factor_group,
+                        feature_id,
+                        weight,
+                        direction,
+                        enabled
+                    FROM analytics.main.experiment_run_factors
+                    WHERE experiment_id = ?
+                    ORDER BY factor_group, feature_id
+                    """,
+                    [selected_experiment],
+                )
+
+                # ============================================
+                # SELECTED EXPERIMENT METADATA
+                # ============================================
+
+                if not experiment.empty:
+
+                    exp = experiment.iloc[0]
+
+                    col1, col2, col3, col4 = st.columns(4)
+
+                    col1.metric(
+                        "Experiment Type",
+                        str(
+                            exp[
+                                "experiment_type"
+                            ]
+                        ),
+                    )
+
+                    col2.metric(
+                        "Top N",
+                        int(
+                            exp["top_n"]
+                        ),
+                    )
+
+                    col3.metric(
+                        "Net CAGR",
+                        f"{float(selected_eval['net_cagr_pct']):.2f}%",
+                    )
+
+                    col4.metric(
+                        "Sharpe",
+                        f"{float(selected_eval['net_sharpe']):.2f}",
+                    )
+
+                    metadata = pd.DataFrame(
+                        {
+                            "Parameter": [
+                                "Experiment ID",
+                                "Experiment Name",
+                                "Experiment Type",
+                                "Parameter Name",
+                                "Parameter Value",
+                                "Top N",
+                                "Transaction Cost",
+                                "Status",
+                                "Created At",
+                                "Start Date",
+                                "End Date",
+                                "Weeks",
+                            ],
+                            "Value": [
+                                exp[
+                                    "experiment_id"
+                                ],
+                                exp[
+                                    "experiment_name"
+                                ],
+                                exp[
+                                    "experiment_type"
+                                ],
+                                exp[
+                                    "parameter_name"
+                                ],
+                                exp[
+                                    "parameter_value"
+                                ],
+                                exp["top_n"],
+                                (
+                                    f"{float(exp['transaction_cost_rate']) * 100:.3f}%"
+                                ),
+                                exp["status"],
+                                exp["created_at"],
+                                selected_eval[
+                                    "start_date"
+                                ],
+                                selected_eval[
+                                    "end_date"
+                                ],
+                                safe_int(selected_eval["weeks"]),
+                            ],
+                        }
+                    )
+
+                    st.dataframe(
+                        metadata,
+                        use_container_width=True,
+                        hide_index=True,
+                    )
+
+                # ============================================
+                # FACTOR CONFIGURATION
+                # ============================================
+
+                if not factors.empty:
+
+                    st.subheader(
+                        "🧩 Factor Configuration"
+                    )
+
+                    factor_display = factors.copy()
+
+                    factor_display[
+                        "Direction"
+                    ] = factor_display[
+                        "direction"
+                    ].map(
+                        {
+                            1: "Positive",
+                            -1: "Negative",
+                        }
+                    )
+
+                    factor_display[
+                        "Weight %"
+                    ] = (
+                        factor_display[
+                            "weight"
+                        ]
+                        * 100
+                    ).round(2)
+
+                    factor_display = factor_display[
+                        [
+                            "factor_group",
+                            "feature_id",
+                            "enabled",
+                            "Weight %",
+                            "Direction",
+                        ]
+                    ].rename(
+                        columns={
+                            "factor_group": "Factor Group",
+                            "feature_id": "Feature",
+                            "enabled": "Enabled",
+                        }
+                    )
+
+                    st.dataframe(
+                        factor_display,
+                        use_container_width=True,
+                        hide_index=True,
+                    )
+
+                # ============================================
+                # FUTURE BASELINE DESIGN
+                # ============================================
+
+                st.subheader(
+                    "🎯 Comparison Baseline"
+                )
+
+                if baseline_row is not None:
+
+                    st.info(
+                        "Current baseline: "
+                        f"{baseline_row['experiment_name']}. "
+                        "The R&D review keeps baseline selection "
+                        "separate from the experiment itself so a "
+                        "future version can allow comparison against "
+                        "another validated experiment or production "
+                        "configuration."
+                    )
+
+                else:
+
+                    st.info(
+                        "No standard baseline is available in "
+                        "this batch. Future versions can support "
+                        "selecting a validated experiment or "
+                        "production configuration as the baseline."
+                    )
+
+                st.info(
+                    "R&D results are for research and human review only. "
+                    "Promoting an experiment to production remains a "
+                    "deliberate configuration-management decision."
+                )
 
     except Exception as e:
+
         st.error(f"Unable to load R&D experiments: {e}")
+        st.exception(e)
 
 
 # ============================================================
