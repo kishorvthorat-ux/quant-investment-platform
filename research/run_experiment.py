@@ -518,6 +518,50 @@ def mark_failed(conn, variant: ExperimentVariant):
         [variant.experiment_id],
     )
 
+def run_custom_experiment(
+    group_weights: dict[str, float],
+    factor_weights: dict[str, float],
+    top_n: int,
+    transaction_cost_rate: float,
+) -> str:
+
+    variant = make_variant(
+        "CUSTOM_RND",
+        "CUSTOM",
+        None,
+        group_weights,
+        factor_weights,
+        top_n,
+        transaction_cost_rate,
+    )
+
+    conn = duckdb.connect(DB_PATH)
+
+    ensure_tables(conn)
+
+    try:
+        print(
+            f"Running CUSTOM_RND: "
+            f"{variant.experiment_id}"
+        )
+
+        save_variant(conn, variant)
+        run_scores(conn, variant)
+        build_portfolio(conn, variant)
+        mark_completed(conn, variant)
+
+        print(
+            f"  completed: {variant.experiment_id}"
+        )
+
+        return variant.experiment_id
+
+    except Exception:
+        mark_failed(conn, variant)
+        raise
+
+    finally:
+        conn.close()
 
 def run_variants(variants: list[ExperimentVariant]):
 
