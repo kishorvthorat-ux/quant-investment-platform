@@ -1,7 +1,8 @@
 import streamlit as st
+import pandas as pd
 
-from db import query_df
-
+#from db import query_df
+from db import query_df, query_duckdb
 
 st.set_page_config(
     page_title="Quant Investment Platform",
@@ -13,15 +14,15 @@ st.title("Quant Investment Platform")
 st.caption("Personal quantitative investing dashboard")
 
 
-tab_status, tab_signals, tab_performance = st.tabs(
+tab_status, tab_signals, tab_performance, tab_rnd, tab_config = st.tabs(
     [
         "🏠 System Status",
         "📊 Signal Review",
         "📈 Strategy Performance",
-	"⚙️ Configuration Manager",
+        "🧪 R&D",
+        "⚙️ Configuration Manager",
     ]
 )
-
 
 # ============================================================
 # SYSTEM STATUS
@@ -450,6 +451,452 @@ with tab_performance:
 
     except Exception as e:
         st.error(f"Unable to load strategy performance: {e}")
+
+# ============================================================
+# R&D / EXPERIMENT REVIEW
+# ============================================================
+
+with tab_rnd:
+
+    st.header("R&D Experiment Review")
+
+    st.caption(
+        "Research-only experiment analysis. "
+        "Production strategy configurations are not modified from this tab."
+    )
+
+    try:
+
+        # ----------------------------------------------------
+        # Latest experiment batch
+        # ----------------------------------------------------
+
+        batch_info = query_duckdb(
+            """
+            SELECT
+                split_part(experiment_id, '_', 1) AS batch_id,
+                COUNT(*) AS experiment_count,
+                COUNT(*) FILTER (
+                    WHERE status = 'COMPLETED'
+                ) AS completed_count,
+                COUNT(*) FILTER (
+                    WHERE status <> 'COMPLETED'
+                ) AS non_completed_count,
+                MIN(created_at) AS batch_created_at
+            FROM analytics.main.experiment_runs
+            WHERE split_part(experiment_id, '_', 1) = (
+                SELECT MAX(split_part(experiment_id, '_', 1))
+                FROM analytics.main.experiment_runs
+            )
+            GROUP BY split_part(experiment_id, '_', 1)
+            """
+        )
+
+        if batch_info.empty:
+            st.info("No R&D experiments available.")
+            st.stop()
+
+        batch = batch_info.iloc[0]
+
+        col1, col2, col3, col4 = st.columns(4)
+
+        col1.metric(
+            "Latest Batch",
+            str(batch["batch_id"]),
+        )
+
+        col2.metric(
+            "Experiments",
+            int(batch["experiment_count"]),
+        )
+
+        col3.metric(
+            "Completed",
+            int(batch["completed_count"]),
+        )
+
+        col4.metric(
+            "Non-completed",
+            int(batch["non_completed_count"]),
+        )
+
+        st.caption(
+            f"Batch created: {batch['batch_created_at']}"
+        )
+
+        # ----------------------------------------------------
+        # Experiment comparison
+        # ----------------------------------------------------
+
+        st.subheader("Experiment Comparison")
+
+        evaluations = query_duckdb(
+            """
+            SELECT
+                e.experiment_id,
+                e.experiment_type,
+                e.experiment_name,
+                r.status,
+                e.net_return_pct,
+                e.net_cagr_pct,
+                e.net_sharpe,
+                e.net_max_drawdown_pct,
+                e.net_win_rate_pct,
+                e.turnover_pct,
+                e.transaction_cost_pct,
+                e.delta_cagr_pct,
+                e.delta_sharpe
+            FROM analytics.main.experiment_evaluations e
+            JOIN analytics.main.experiment_runs r
+              ON e.experiment_id = r.experiment_id
+            WHERE split_part(e.experiment_id, '_', 1) = ?
+            ORDER BY
+                CASE
+                    WHEN e.experiment_name =
+                        'FACTOR_ABLATION_BASELINE_None'
+                    THEN 0
+                    ELSE 1
+                END,
+                e.net_cagr_pct DESC
+            """,
+            [str(batch["batch_id"])],
+        )
+
+        if evaluations.empty:
+            st.info(
+                "No evaluated experiments found for the latest batch."
+            )
+
+        else:
+
+            comparison = evaluations.copy()
+
+            comparison["Experiment"] = comparison[
+                "experiment_name"
+            ]
+
+            comparison["Type"] = comparison[
+                "experiment_type"
+            ]
+
+            comparison["Status"] = comparison[
+                "status"
+            ]
+
+            comparison["Net Return %"] = comparison[
+                "net_return_pct"
+            ].round(2)
+
+            comparison["CAGR %"] = comparison[
+                "net_cagr_pct"
+            ].round(2)
+
+            comparison["Sharpe"] = comparison[
+                "net_sharpe"
+            ].round(2)
+
+            comparison["Max Drawdown %"] = comparison[
+                "net_max_drawdown_pct"
+            ].round(2)
+
+            comparison["Win Rate %"] = comparison[
+                "net_win_rate_pct"
+            ].round(2)
+
+            comparison["Turnover %"] = comparison[
+                "turnover_pct"
+            ].round(2)
+
+            comparison["Transaction Cost %"] = comparison[
+                "transaction_cost_pct"
+            ].round(2)
+
+            comparison["Δ CAGR"] = comparison[
+                "delta_cagr_pct"
+            ].round(2)
+
+            comparison["Δ Sharpe"] = comparison[
+                "delta_sharpe"
+            ].round(2)
+
+            display_columns = [
+                "Experiment",
+                "Type",
+                "Status",
+                "Net Return %",
+                "CAGR %",
+                "Sharpe",
+                "Max Drawdown %",
+                "Win Rate %",
+                "Turnover %",
+                "Transaction Cost %",
+                "Δ CAGR",
+                "Δ Sharpe",
+            ]
+
+            st.dataframe(
+                comparison[display_columns],
+                use_container_width=True,
+                hide_index=True,
+            )
+
+        # ----------------------------------------------------
+        # Baseline comparison
+        # ----------------------------------------------------
+
+        st.subheader("Baseline Comparison")
+
+        baseline = evaluations[
+            evaluations["experiment_name"]
+            == "FACTOR_ABLATION_BASELINE_None"
+        ]
+
+        if baseline.empty:
+            st.warning(
+                "Explicit R&D baseline was not found in this batch."
+            )
+
+        else:
+
+            baseline_row = baseline.iloc[0]
+
+            col1, col2, col3, col4 = st.columns(4)
+
+            col1.metric(
+                "Baseline CAGR",
+                f"{baseline_row['net_cagr_pct']:.2f}%",
+            )
+
+            col2.metric(
+                "Baseline Sharpe",
+                f"{baseline_row['net_sharpe']:.2f}",
+            )
+
+            col3.metric(
+                "Baseline Max DD",
+                f"{baseline_row['net_max_drawdown_pct']:.2f}%",
+            )
+
+            col4.metric(
+                "Baseline Net Return",
+                f"{baseline_row['net_return_pct']:.2f}%",
+            )
+
+            st.caption(
+                "All Δ values are measured against "
+                "FACTOR_ABLATION_BASELINE_None."
+            )
+
+        # ----------------------------------------------------
+        # Experiment detail
+        # ----------------------------------------------------
+
+        st.subheader("Experiment Detail")
+
+        experiment_options = evaluations[
+            [
+                "experiment_id",
+                "experiment_name",
+            ]
+        ].drop_duplicates()
+
+        selected_experiment = st.selectbox(
+            "Experiment",
+            experiment_options["experiment_id"].tolist(),
+            format_func=lambda x: (
+                experiment_options.loc[
+                    experiment_options["experiment_id"] == x,
+                    "experiment_name",
+                ].iloc[0]
+            ),
+            key="rnd_experiment",
+        )
+
+        selected_eval = evaluations[
+            evaluations["experiment_id"] == selected_experiment
+        ].iloc[0]
+
+        experiment = query_duckdb(
+            """
+            SELECT
+                experiment_id,
+                experiment_name,
+                experiment_type,
+                parameter_name,
+                parameter_value,
+                top_n,
+                transaction_cost_rate,
+                group_weights_json,
+                factor_weights_json,
+                status,
+                created_at
+            FROM analytics.main.experiment_runs
+            WHERE experiment_id = ?
+            """,
+            [selected_experiment],
+        )
+
+        factors = query_duckdb(
+            """
+            SELECT
+                factor_group,
+                feature_id,
+                weight,
+                direction,
+                enabled
+            FROM analytics.main.experiment_run_factors
+            WHERE experiment_id = ?
+            ORDER BY factor_group, feature_id
+            """,
+            [selected_experiment],
+        )
+
+        yearly = query_duckdb(
+            """
+            SELECT
+                year,
+                return_pct,
+                weeks
+            FROM analytics.main.experiment_yearly_results
+            WHERE experiment_id = ?
+            ORDER BY year
+            """,
+            [selected_experiment],
+        )
+
+        if not experiment.empty:
+
+            exp = experiment.iloc[0]
+
+            col1, col2, col3, col4 = st.columns(4)
+
+            col1.metric(
+                "Experiment Type",
+                str(exp["experiment_type"]),
+            )
+
+            col2.metric(
+                "Top N",
+                int(exp["top_n"]),
+            )
+
+            col3.metric(
+                "Net CAGR",
+                f"{selected_eval['net_cagr_pct']:.2f}%",
+            )
+
+            col4.metric(
+                "Sharpe",
+                f"{selected_eval['net_sharpe']:.2f}",
+            )
+
+            detail = pd.DataFrame(
+                {
+                    "Parameter": [
+                        "Experiment ID",
+                        "Parameter Name",
+                        "Parameter Value",
+                        "Transaction Cost",
+                        "Status",
+                        "Created At",
+                    ],
+                    "Value": [
+                        exp["experiment_id"],
+                        exp["parameter_name"],
+                        exp["parameter_value"],
+                        f"{exp['transaction_cost_rate'] * 100:.2f}%",
+                        exp["status"],
+                        exp["created_at"],
+                    ],
+                }
+            )
+
+            st.dataframe(
+                detail,
+                use_container_width=True,
+                hide_index=True,
+            )
+
+        # ----------------------------------------------------
+        # Factor configuration
+        # ----------------------------------------------------
+
+        if not factors.empty:
+
+            st.markdown("**Factor Configuration**")
+
+            factor_display = factors.copy()
+
+            factor_display["Direction"] = factor_display[
+                "direction"
+            ].map(
+                {
+                    1: "Positive",
+                    -1: "Negative",
+                }
+            )
+
+            factor_display["Weight"] = (
+                factor_display["weight"] * 100
+            ).round(2)
+
+            factor_display = factor_display[
+                [
+                    "factor_group",
+                    "feature_id",
+                    "enabled",
+                    "Weight",
+                    "Direction",
+                ]
+            ].rename(
+                columns={
+                    "factor_group": "Factor Group",
+                    "feature_id": "Feature",
+                    "enabled": "Enabled",
+                }
+            )
+
+            st.dataframe(
+                factor_display,
+                use_container_width=True,
+                hide_index=True,
+            )
+
+        # ----------------------------------------------------
+        # Yearly performance
+        # ----------------------------------------------------
+
+        if not yearly.empty:
+
+            st.markdown("**Yearly Performance**")
+
+            yearly_display = yearly.rename(
+                columns={
+                    "year": "Year",
+                    "return_pct": "Net Return %",
+                    "weeks": "Weeks",
+                }
+            ).copy()
+
+            yearly_display["Net Return %"] = (
+                yearly_display["Net Return %"].round(2)
+            )
+
+            st.dataframe(
+                yearly_display,
+                use_container_width=True,
+                hide_index=True,
+            )
+
+        st.info(
+            "R&D results are for research and human review only. "
+            "Promoting an experiment to production remains a deliberate "
+            "configuration-management decision."
+        )
+
+    except Exception as e:
+        st.error(f"Unable to load R&D experiments: {e}")
+
 
 # ============================================================
 # CONFIGURATION MANAGER
