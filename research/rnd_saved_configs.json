@@ -1,0 +1,84 @@
+[
+  {
+    "name": "TrendandMomentumAdjustment 12092026",
+    "group_weights": {
+      "MOMENTUM": 0.4,
+      "TREND": 0.25,
+      "RISK": 0.2,
+      "DRAWDOWN": 0.15
+    },
+    "factor_weights": {
+      "return_20d": 0.15,
+      "return_60d": 0.1,
+      "return_252d": 0.1,
+      "price_vs_ma_20d": 0.08,
+      "price_vs_ma_60d": 0.08,
+      "price_vs_ma_252d": 0.08,
+      "volatility_20d": 0.07,
+      "volatility_60d": 0.07,
+      "volatility_252d": 0.06,
+      "drawdown_252d": 0.15
+    },
+    "factor_enabled": {
+      "return_20d": true,
+      "return_60d": true,
+      "return_252d": true,
+      "price_vs_ma_20d": true,
+      "price_vs_ma_60d": true,
+      "price_vs_ma_252d": true,
+      "volatility_20d": true,
+      "volatility_60d": true,
+      "volatility_252d": true,
+      "drawdown_252d": true
+    },
+    "top_n": 2,
+    "transaction_cost_pct": 0.2,
+    "baseline_experiment_id": "20260911031036_b6e819",
+    "created_at": "2026-09-12T16:19:13",
+    "updated_at": "2026-09-12T16:38:37",
+    "production_configuration_id": 7,
+    "production_strategy_id": "TRENDANDMOMENTUMADJUSTMENT_12092026",
+    "production_status": "VALIDATED"
+  },
+  {
+    "name": "MaxCAGR Mix 12092026",
+    "group_weights": {
+      "MOMENTUM": 0.438095,
+      "TREND": 0.27619,
+      "RISK": 0.285714,
+      "DRAWDOWN": 0.0
+    },
+    "factor_weights": {
+      "return_20d": 0.103783,
+      "return_60d": 0.146294,
+      "return_252d": 0.188018,
+      "price_vs_ma_20d": 0.0,
+      "price_vs_ma_60d": 0.138095,
+      "price_vs_ma_252d": 0.138095,
+      "volatility_20d": 0.0,
+      "volatility_60d": 0.285714,
+      "volatility_252d": 0.0,
+      "drawdown_252d": 0.0
+    },
+    "factor_enabled": {
+      "return_20d": true,
+      "return_60d": true,
+      "return_252d": true,
+      "price_vs_ma_20d": false,
+      "price_vs_ma_60d": true,
+      "price_vs_ma_252d": true,
+      "volatility_20d": false,
+      "volatility_60d": true,
+      "volatility_252d": false,
+      "drawdown_252d": false
+    },
+    "top_n": 2,
+    "transaction_cost_pct": 0.2,
+    "baseline_experiment_id": "20260911031036_b6e819",
+    "created_at": "2026-09-12T17:07:32",
+    "updated_at": "2026-09-12T17:07:32",
+    "optimizer_in_sample_cagr_pct": 48.8093,
+    "optimizer_in_sample_sharpe": 3.7257,
+    "optimizer_in_sample_max_dd_pct": -23.7918
+  }
+]

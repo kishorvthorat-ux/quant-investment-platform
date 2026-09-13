@@ -199,7 +199,7 @@ def calculate_turnover(con, experiment_ids):
                     current_weight
                     - coalesce(previous_weight, 0.0)
                 )
-            ) as turnover
+            ) / 2.0 as turnover
         from previous_weights
         group by experiment_id, trade_date
         order by experiment_id, trade_date
@@ -223,6 +223,7 @@ def calculate_metrics(df):
             "net_win_rate_pct": 0.0,
             "turnover_pct": 0.0,
             "transaction_cost_pct": 0.0,
+            "avg_weekly_turnover_pct": 0.0,
         }
 
     df = df.sort_values("trade_date").copy()
@@ -260,13 +261,25 @@ def calculate_metrics(df):
 
     win_rate = (net > 0).mean()
 
-    turnover = df["turnover"].fillna(0.0).sum()
+    one_way_turnover = df["turnover"].fillna(0.0).sum()
     transaction_cost = df["transaction_cost"].fillna(0.0).sum()
+    n_periods = len(df)
+
+    annualized_turnover_pct = (
+        one_way_turnover / years * 100.0
+        if years > 0
+        else 0.0
+    )
+    avg_period_turnover_pct = (
+        one_way_turnover / n_periods * 100.0
+        if n_periods > 0
+        else 0.0
+    )
 
     return {
         "start_date": start_date.date(),
         "end_date": end_date.date(),
-        "trading_periods": len(df),
+        "trading_periods": n_periods,
         "gross_return_pct": gross_total * 100,
         "gross_cagr_pct": gross_cagr * 100,
         "net_return_pct": net_total * 100,
@@ -274,8 +287,9 @@ def calculate_metrics(df):
         "net_sharpe": sharpe,
         "net_max_drawdown_pct": max_drawdown * 100,
         "net_win_rate_pct": win_rate * 100,
-        "turnover_pct": turnover * 100,
+        "turnover_pct": annualized_turnover_pct,
         "transaction_cost_pct": transaction_cost * 100,
+        "avg_weekly_turnover_pct": avg_period_turnover_pct,
     }
 
 
@@ -325,6 +339,8 @@ def main():
             experiment_id,
             experiment_type,
             experiment_name,
+            top_n,
+            transaction_cost_rate,
             status
         from analytics.main.experiment_runs
         where split_part(experiment_id, '_', 1) = '{batch_id}'
@@ -354,9 +370,36 @@ def main():
         how="left",
     )
 
+#    df["turnover"] = df["turnover"].fillna(0.0)
+#    df["transaction_cost"] = df["turnover"] * DEFAULT_COST
+#    df["net_return"] = df["gross_return"] - df["transaction_cost"]
     df["turnover"] = df["turnover"].fillna(0.0)
-    df["transaction_cost"] = df["turnover"] * DEFAULT_COST
-    df["net_return"] = df["gross_return"] - df["transaction_cost"]
+
+    experiment_costs = experiments[
+        ["experiment_id", "transaction_cost_rate"]
+    ].copy()
+
+    df = df.merge(
+        experiment_costs,
+        on="experiment_id",
+        how="left",
+    )
+
+    df["transaction_cost_rate"] = (
+        df["transaction_cost_rate"]
+        .fillna(DEFAULT_COST)
+    )
+
+    df["transaction_cost"] = (
+        df["turnover"]
+        * df["transaction_cost_rate"]
+    )
+
+    df["net_return"] = (
+        df["gross_return"]
+        - df["transaction_cost"]
+    )
+
 
     print("Calculating performance...")
 
@@ -432,11 +475,8 @@ def main():
 
     con.execute("""
         delete from analytics.main.experiment_evaluations
-        where experiment_id in (
-            select experiment_id
-            from analytics.main.experiment_runs
-        )
-    """)
+        where split_part(experiment_id, '_', 1) = ?
+    """, [batch_id])
 
     con.register("result_df", result_df)
 
@@ -478,7 +518,7 @@ def main():
             gross_return_pct,
             transaction_cost_pct,
             turnover_pct,
-            case when trading_periods > 0 then turnover_pct / trading_periods else 0 end as avg_weekly_turnover_pct,
+            case when trading_periods > 0 then avg_weekly_turnover_pct else 0 end as avg_weekly_turnover_pct,
             delta_cagr_pct,
             delta_sharpe,
             evaluated_at
@@ -489,12 +529,9 @@ def main():
         con.register("yearly_df", yearly_df)
 
         con.execute("""
-            delete from analytics.main.experiment_yearly_results
-            where experiment_id in (
-                select experiment_id
-                from analytics.main.experiment_runs
-            )
-        """)
+        delete from analytics.main.experiment_yearly_results
+        where split_part(experiment_id, '_', 1) = ?
+    """, [batch_id])
 
         con.execute("""
             insert into analytics.main.experiment_yearly_results (

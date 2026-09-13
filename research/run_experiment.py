@@ -81,6 +81,9 @@ class ExperimentVariant:
     factor_weights: dict
     top_n: int
     transaction_cost_rate: float
+    baseline_experiment_id: str | None = None
+    display_name: str | None = None
+    is_protected: bool = False
 
 
 def normalize_weights(weights: dict[str, float]) -> dict[str, float]:
@@ -134,7 +137,6 @@ def build_factor_weights(
 
     return normalize_weights(result)
 
-
 def make_variant(
     experiment_type: str,
     parameter_name: str,
@@ -143,6 +145,9 @@ def make_variant(
     factor_weights: dict[str, float],
     top_n: int,
     transaction_cost_rate: float,
+    batch_id: str | None = None,
+    display_name: str | None = None,
+    is_protected: bool = False,
 ) -> ExperimentVariant:
 
     final_factor_weights = build_factor_weights(
@@ -150,9 +155,11 @@ def make_variant(
         factor_weights,
     )
 
+    if batch_id is None:
+        batch_id = datetime.now(UTC).strftime("%Y%m%d%H%M%S")
+
     experiment_id = (
-        ####datetime.utcnow().strftime("%Y%m%d%H%M%S")
-	datetime.now(UTC).strftime("%Y%m%d%H%M%S")
+        batch_id
         + "_"
         + uuid.uuid4().hex[:6]
     )
@@ -173,6 +180,8 @@ def make_variant(
         factor_weights=final_factor_weights,
         top_n=top_n,
         transaction_cost_rate=transaction_cost_rate,
+        display_name=display_name,
+        is_protected=is_protected,
     )
 
 
@@ -307,6 +316,25 @@ def ensure_tables(conn):
     """)
 
     conn.execute("""
+        ALTER TABLE analytics.main.experiment_runs
+        ADD COLUMN IF NOT EXISTS baseline_experiment_id VARCHAR
+    """)
+
+    conn.execute("""
+        ALTER TABLE analytics.main.experiment_runs
+        ADD COLUMN IF NOT EXISTS display_name VARCHAR
+    """)
+
+    conn.execute("""
+        ALTER TABLE analytics.main.experiment_runs
+        ADD COLUMN IF NOT EXISTS is_protected BOOLEAN DEFAULT FALSE
+    """)
+
+    from research.experiment_maintenance import seed_experiment_labels
+
+    seed_experiment_labels(conn)
+
+    conn.execute("""
         CREATE TABLE IF NOT EXISTS analytics.main.experiment_run_factors (
             experiment_id VARCHAR,
             factor_group VARCHAR,
@@ -355,9 +383,12 @@ def save_variant(conn, variant: ExperimentVariant):
             transaction_cost_rate,
             group_weights_json,
             factor_weights_json,
+            baseline_experiment_id,
+            display_name,
+            is_protected,
             status
         )
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         """,
         [
             variant.experiment_id,
@@ -369,6 +400,9 @@ def save_variant(conn, variant: ExperimentVariant):
             variant.transaction_cost_rate,
             json.dumps(variant.group_weights),
             json.dumps(variant.factor_weights),
+            variant.baseline_experiment_id,
+            variant.display_name,
+            bool(variant.is_protected),
             "RUNNING",
         ],
     )
@@ -523,45 +557,387 @@ def run_custom_experiment(
     factor_weights: dict[str, float],
     top_n: int,
     transaction_cost_rate: float,
+    baseline_experiment_id: str | None = None,
+    display_name: str | None = None,
 ) -> str:
 
-    variant = make_variant(
-        "CUSTOM_RND",
-        "CUSTOM",
-        None,
-        group_weights,
-        factor_weights,
-        top_n,
-        transaction_cost_rate,
-    )
+    batch_id = datetime.now(UTC).strftime("%Y%m%d%H%M%S")
 
     conn = duckdb.connect(DB_PATH)
-
     ensure_tables(conn)
 
     try:
-        print(
-            f"Running CUSTOM_RND: "
-            f"{variant.experiment_id}"
+
+        # ------------------------------------------------------------
+        # Load the selected baseline configuration.
+        #
+        # If no baseline is supplied, preserve the original default
+        # FACTOR_CONFIG baseline.
+        # ------------------------------------------------------------
+        baseline_group_weights = DEFAULT_GROUP_WEIGHTS.copy()
+        baseline_factor_weights = DEFAULT_FACTOR_WEIGHTS.copy()
+
+        if baseline_experiment_id:
+
+            baseline_rows = conn.execute(
+                """
+                SELECT
+                    factor_group,
+                    feature_id,
+                    weight,
+                    enabled
+                FROM analytics.main.experiment_run_factors
+                WHERE experiment_id = ?
+                """,
+                [baseline_experiment_id],
+            ).fetchdf()
+
+            if baseline_rows.empty:
+                raise RuntimeError(
+                    "Selected baseline experiment has no factor "
+                    f"configuration: {baseline_experiment_id}"
+                )
+
+            # Reconstruct the baseline configuration from the
+            # actual stored final factor weights.
+            baseline_factor_weights = {}
+
+            for _, row in baseline_rows.iterrows():
+
+                feature_id = row["feature_id"]
+                enabled = bool(row["enabled"])
+
+                baseline_factor_weights[feature_id] = (
+                    float(row["weight"])
+                    if enabled
+                    else 0.0
+                )
+
+            # Group weights are the sum of the final normalized
+            # factor weights belonging to each group.
+            baseline_group_weights = {}
+
+            for group in FACTOR_GROUPS:
+
+                baseline_group_weights[group] = sum(
+                    baseline_factor_weights.get(
+                        feature_id,
+                        0.0,
+                    )
+                    for feature_id in FACTOR_GROUPS[group]
+                )
+
+            print(
+                "Using selected baseline: "
+                f"{baseline_experiment_id}"
+            )
+
+        else:
+
+            print(
+                "Using default FACTOR_CONFIG baseline"
+            )
+
+        # ------------------------------------------------------------
+        # Create the baseline variant using the SELECTED baseline
+        # configuration.
+        # ------------------------------------------------------------
+        baseline = make_variant(
+            "FACTOR_ABLATION",
+            "BASELINE",
+            None,
+            baseline_group_weights,
+            baseline_factor_weights,
+            top_n,
+            transaction_cost_rate,
+            batch_id=batch_id,
+            display_name="Baseline copy for this run",
+            is_protected=False,
         )
 
-        save_variant(conn, variant)
-        run_scores(conn, variant)
-        build_portfolio(conn, variant)
-        mark_completed(conn, variant)
-
-        print(
-            f"  completed: {variant.experiment_id}"
+        # ------------------------------------------------------------
+        # Create the candidate/custom variant.
+        # ------------------------------------------------------------
+        custom = make_variant(
+            "CUSTOM_RND",
+            "CUSTOM",
+            None,
+            group_weights,
+            factor_weights,
+            top_n,
+            transaction_cost_rate,
+            batch_id=batch_id,
+            display_name=display_name or "Custom mix",
+            is_protected=False,
         )
 
-        return variant.experiment_id
+        # Record which existing experiment was selected as the
+        # reference baseline for this custom R&D experiment.
+        custom.baseline_experiment_id = baseline_experiment_id
+
+        variants = [baseline, custom]
+
+        print(
+            f"Running CUSTOM_RND batch: {batch_id}"
+        )
+
+        for variant in variants:
+
+            print(
+                f"  Running {variant.experiment_type}: "
+                f"{variant.experiment_id}"
+            )
+
+            save_variant(conn, variant)
+            run_scores(conn, variant)
+            build_portfolio(conn, variant)
+            mark_completed(conn, variant)
+
+            print(
+                f"    completed: {variant.experiment_id}"
+            )
+
+        return custom.experiment_id
 
     except Exception:
-        mark_failed(conn, variant)
+
+        for variant in locals().get("variants", []):
+
+            try:
+                mark_failed(conn, variant)
+            except Exception:
+                pass
+
+        raise
+
+    finally:
+
+        conn.close()
+
+
+GROUP_WEIGHT_SHOCKS = (
+    ("-0.50", -0.50),
+    ("-0.25", -0.25),
+    ("+0.25", 0.25),
+    ("+0.50", 0.50),
+    ("+1%", 0.01),
+)
+
+TOP_N_VALUES = (2, 3, 4, 5)
+
+GROUP_DISPLAY_NAMES = {
+    "MOMENTUM": "Momentum",
+    "TREND": "Trend",
+    "RISK": "Risk",
+    "DRAWDOWN": "Drawdown",
+}
+
+
+def load_run_weights(conn, experiment_id: str) -> tuple[dict, dict]:
+    rows = conn.execute(
+        """
+        SELECT
+            factor_group,
+            feature_id,
+            weight,
+            enabled
+        FROM analytics.main.experiment_run_factors
+        WHERE experiment_id = ?
+        """,
+        [experiment_id],
+    ).fetchdf()
+
+    if rows.empty:
+        raise RuntimeError(
+            "Selected experiment has no factor "
+            f"configuration: {experiment_id}"
+        )
+
+    factor_weights = {}
+
+    for _, row in rows.iterrows():
+        feature_id = row["feature_id"]
+        enabled = bool(row["enabled"])
+        factor_weights[feature_id] = (
+            float(row["weight"]) if enabled else 0.0
+        )
+
+    group_weights = {}
+
+    for group in FACTOR_GROUPS:
+        group_weights[group] = sum(
+            factor_weights.get(feature_id, 0.0)
+            for feature_id in FACTOR_GROUPS[group]
+        )
+
+    return group_weights, factor_weights
+
+
+def shock_group_weights(
+    group_weights: dict[str, float],
+    group: str,
+    delta: float,
+) -> dict[str, float] | None:
+
+    shocked = {
+        key: float(value)
+        for key, value in group_weights.items()
+    }
+
+    original = shocked.get(group, 0.0)
+    updated = original + delta
+
+    if updated < 0:
+        updated = 0.0
+
+    if abs(updated - original) < 1e-12:
+        return None
+
+    shocked[group] = updated
+
+    if sum(shocked.values()) <= 0:
+        return None
+
+    return shocked
+
+
+def run_factor_sensitivity_experiment(
+    group_weights: dict[str, float],
+    factor_weights: dict[str, float],
+    top_n: int,
+    transaction_cost_rate: float,
+    baseline_experiment_id: str | None = None,
+    display_name: str | None = None,
+) -> str:
+
+    batch_id = datetime.now(UTC).strftime("%Y%m%d%H%M%S")
+
+    conn = duckdb.connect(DB_PATH)
+    ensure_tables(conn)
+
+    selected_name = display_name or "Selected config"
+
+    try:
+        if baseline_experiment_id:
+            baseline_group_weights, baseline_factor_weights = (
+                load_run_weights(conn, baseline_experiment_id)
+            )
+        else:
+            baseline_group_weights = DEFAULT_GROUP_WEIGHTS.copy()
+            baseline_factor_weights = DEFAULT_FACTOR_WEIGHTS.copy()
+
+        baseline = make_variant(
+            "FACTOR_ABLATION",
+            "BASELINE",
+            None,
+            baseline_group_weights,
+            baseline_factor_weights,
+            top_n,
+            transaction_cost_rate,
+            batch_id=batch_id,
+            display_name="Baseline copy for this run",
+            is_protected=False,
+        )
+
+        selected = make_variant(
+            "CUSTOM_RND",
+            "CUSTOM",
+            None,
+            group_weights,
+            factor_weights,
+            top_n,
+            transaction_cost_rate,
+            batch_id=batch_id,
+            display_name=selected_name,
+            is_protected=False,
+        )
+        selected.baseline_experiment_id = baseline_experiment_id
+
+        variants = [baseline, selected]
+
+        for group in FACTOR_GROUPS:
+            for shock_label, delta in GROUP_WEIGHT_SHOCKS:
+                shocked_groups = shock_group_weights(
+                    group_weights,
+                    group,
+                    delta,
+                )
+
+                if shocked_groups is None:
+                    continue
+
+                group_label = GROUP_DISPLAY_NAMES.get(
+                    group,
+                    group.title(),
+                )
+
+                variant = make_variant(
+                    "WEIGHT_SENSITIVITY",
+                    group,
+                    delta,
+                    shocked_groups,
+                    factor_weights,
+                    top_n,
+                    transaction_cost_rate,
+                    batch_id=batch_id,
+                    display_name=(
+                        f"{group_label} {shock_label} vs {selected_name}"
+                    ),
+                    is_protected=False,
+                )
+                variant.baseline_experiment_id = baseline_experiment_id
+                variants.append(variant)
+
+        for n in TOP_N_VALUES:
+            if int(n) == int(top_n):
+                continue
+
+            variant = make_variant(
+                "TOP_N_SENSITIVITY",
+                "TOP_N",
+                float(n),
+                group_weights,
+                factor_weights,
+                int(n),
+                transaction_cost_rate,
+                batch_id=batch_id,
+                display_name=(
+                    f"Top {n} vs {selected_name}"
+                ),
+                is_protected=False,
+            )
+            variant.baseline_experiment_id = baseline_experiment_id
+            variants.append(variant)
+
+        print(
+            f"Running WEIGHT_SENSITIVITY batch: {batch_id} "
+            f"({len(variants)} variants)"
+        )
+
+        for variant in variants:
+            print(
+                f"  Running {variant.experiment_type}: "
+                f"{variant.experiment_id}"
+            )
+            save_variant(conn, variant)
+            run_scores(conn, variant)
+            build_portfolio(conn, variant)
+            mark_completed(conn, variant)
+            print(f"    completed: {variant.experiment_id}")
+
+        return selected.experiment_id
+
+    except Exception:
+        for variant in locals().get("variants", []):
+            try:
+                mark_failed(conn, variant)
+            except Exception:
+                pass
         raise
 
     finally:
         conn.close()
+
 
 def run_variants(variants: list[ExperimentVariant]):
 
