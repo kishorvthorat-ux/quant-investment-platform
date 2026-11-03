@@ -24,6 +24,6 @@ select
 
     'PENDING' as order_status
 
-from {{ ref('weekly_signals_v2') }}
+from {{ ref('strategy_signals_v2') }}
 
 where signal in ('BUY', 'SELL')

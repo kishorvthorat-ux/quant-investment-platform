@@ -1,4 +1,17 @@
-with weights as (
+with signal_schedule as (
+
+    select
+        configuration_id,
+        strategy_id,
+        signal_date,
+        execution_date,
+        next_execution_date
+
+    from {{ ref('strategy_signal_schedule_v2') }}
+
+),
+
+weights as (
 
     select
         trade_date as signal_date,
@@ -11,44 +24,18 @@ with weights as (
         composite_score,
         selected_flag,
         target_weight
+
     from {{ ref('portfolio_weights_v2') }}
 
 ),
 
-weekly_signal_dates as (
+scheduled_weights as (
 
     select
-        configuration_id,
-        strategy_id,
-        date_trunc('week', signal_date) as signal_week,
-        max(signal_date) as signal_date
-    from weights
-    group by
-        configuration_id,
-        strategy_id,
-        date_trunc('week', signal_date)
+        s.signal_date,
+        s.execution_date,
+        s.next_execution_date,
 
-),
-
-signal_schedule as (
-
-    select
-        configuration_id,
-        strategy_id,
-        signal_date,
-        lead(signal_date) over (
-            partition by configuration_id, strategy_id
-            order by signal_date
-        ) as next_signal_date
-    from weekly_signal_dates
-
-),
-
-weekly_signals as (
-
-    select
-        w.signal_date,
-        s.next_signal_date,
         w.security_id,
         w.symbol,
         w.exchange,
@@ -58,8 +45,10 @@ weekly_signals as (
         w.composite_score,
         w.selected_flag,
         w.target_weight
-    from weights w
-    inner join signal_schedule s
+
+    from signal_schedule s
+
+    inner join weights w
         on w.signal_date = s.signal_date
        and w.configuration_id = s.configuration_id
        and w.strategy_id = s.strategy_id
@@ -70,7 +59,9 @@ trading_dates as (
 
     select
         trade_date
+
     from {{ ref('stg_trading_calendar') }}
+
     where is_trading_day = true
 
 ),
@@ -80,6 +71,7 @@ daily_positions as (
     select
         s.signal_date,
         td.trade_date as position_date,
+
         s.security_id,
         s.symbol,
         s.exchange,
@@ -90,13 +82,13 @@ daily_positions as (
         s.selected_flag,
         s.target_weight
 
-    from weekly_signals s
+    from scheduled_weights s
 
     inner join trading_dates td
-        on td.trade_date > s.signal_date
+        on td.trade_date >= s.execution_date
        and (
-            s.next_signal_date is null
-            or td.trade_date < s.next_signal_date
+            s.next_execution_date is null
+            or td.trade_date < s.next_execution_date
        )
 
 )

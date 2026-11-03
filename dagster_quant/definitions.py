@@ -35,6 +35,10 @@ def run_dbt() -> str:
             "build",
             "--select",
             "+portfolio_performance_metrics_v2",
+            "+weekly_signals_v2",
+            "+monthly_signals_v2",
+            "+long_term_signals_v2",
+            "+trade_orders_v2",
         ],
         cwd=DBT_PROJECT_DIR,
         capture_output=True,
@@ -84,7 +88,7 @@ def dbt_v2_performance_build():
 daily_quant_pipeline = dg.ScheduleDefinition(
     name="daily_quant_pipeline",
     cron_schedule="30 15 * * 1-5",
-    target=[dbt_v2_performance_build],
+    target=dg.AssetSelection.all(),
 )
 defs = dg.Definitions(
     assets=[
